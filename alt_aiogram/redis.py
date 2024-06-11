@@ -1,12 +1,14 @@
 import os
 import pickle
-from typing import Union, Any, Dict, Tuple
+from typing import Union, Any, Dict, Tuple, List, Literal
 
 from redis import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
 
-from markups.core import MessageConstructor
+from alt_aiogram.markups.core import MessageConstructor
+from dotenv import find_dotenv, load_dotenv
+load_dotenv(find_dotenv())
 
 
 class CustomRedis(Redis):
@@ -82,11 +84,11 @@ class UserStorage(RedisSetUp):
 
     @property
     def context(self):
-        return self._storage.get(f"hotels_context:{self._user_id}")
+        return self._storage.get(f"context:{self._user_id}")
 
     @context.setter
     def context(self, context: Tuple[MessageConstructor, Tuple[Any, ...], Dict[str, Any]]):
-        self._storage.set(f"hotels_context:{self._user_id}", context)
+        self._storage.set(f"context:{self._user_id}", context)
 
 
 class MessagesPool(RedisSetUp):
@@ -129,3 +131,43 @@ class MessagesPool(RedisSetUp):
     @chat_messages_ids_pull.setter
     def chat_messages_ids_pull(self, data: Any):
         self._storage.set(f"chat_messages_ids_pull:{self._user_id}", data)
+
+
+class Tuurngaid(RedisSetUp):
+    @property
+    def words(self):
+        return self._storage.get(f"words:{self._user_id}")
+
+    @words.setter
+    def words(self, words: List[Tuple[str, str, int | None]]):
+        self._storage.set(f"words:{self._user_id}", words)
+
+    @property
+    def new_eng_word(self):
+        return self._storage.get(f"new_eng_word:{self._user_id}")
+
+    @new_eng_word.setter
+    def new_eng_word(self, new_eng_word: str):
+        self._storage.set(f"new_eng_word:{self._user_id}", new_eng_word)
+
+    @property
+    def word_index(self):
+        return self._storage.get(f"word_index:{self._user_id}")
+
+    @word_index.setter
+    def word_index(self, word_index: int):
+        self._storage.set(f"word_index:{self._user_id}", word_index)
+
+    @property
+    def offer_dict(self) -> Dict[str, str]:
+        return self._storage.get(f"offer_dict:{self._user_id}")
+
+    def replenish_dict(self, translate: str):
+        dict_ = self.offer_dict
+        dict_[self.new_eng_word] = translate
+        self.offer_dict = dict_
+
+    @offer_dict.setter
+    def offer_dict(self, offer_dict: int):
+        self._storage.set(f"offer_dict:{self._user_id}", offer_dict)
+

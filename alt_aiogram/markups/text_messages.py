@@ -1,7 +1,9 @@
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
-from alt_aiogram import TextMessageConstructor, TextWidget, ButtonWidget
+
+from alt_aiogram.markups.core import TextMessageConstructor, TextWidget, ButtonWidget
 from tools import Emoji
+
 
 
 class Info(TextMessageConstructor):
@@ -18,7 +20,6 @@ class Info(TextMessageConstructor):
     async def init(self):
         self.add_texts_rows(self.info)
         self.add_button_in_last_row(self.ok)
-        return self
 
 
 class ErrorInfo(Info):
@@ -40,7 +41,6 @@ class Temp(TextMessageConstructor):
 
     async def init(self):
         self.add_texts_rows(self.temp)
-        return self
 
 
 class Input(TextMessageConstructor):
@@ -59,7 +59,6 @@ class Input(TextMessageConstructor):
     async def init(self):
         self.add_texts_rows(self.info)
         self.add_button_in_new_row(self.back)
-        return self
 
 
 class Conform(TextMessageConstructor):
@@ -80,4 +79,3 @@ class Conform(TextMessageConstructor):
     async def init(self):
         self.add_texts_rows(self.info)
         self.add_buttons_in_new_row(self.yes, self.no)
-        return self

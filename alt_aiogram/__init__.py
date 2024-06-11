@@ -2,29 +2,35 @@ import os
 from typing import Type
 from datetime import datetime, timedelta
 
-from aiogram import Bot, Router, F
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, InputMediaPhoto, InputMediaAudio, CallbackQuery
+from aiogram.types import BotCommand, InputMediaPhoto, InputMediaAudio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 
 from alt_aiogram.markups.text_messages import Info
-from alt_aiogram.redis import UserStorage, MessagesPool
-from markups.core import TextMessageConstructor, PhotoMessageConstructor, VoiceMessageConstructor, \
+from alt_aiogram.redis import UserStorage, MessagesPool, Tuurngaid
+from alt_aiogram.markups.core import TextMessageConstructor, PhotoMessageConstructor, VoiceMessageConstructor, \
     MessageConstructor, ButtonWidget, TextWidget
 
 from tools.emoji import Emoji
 from tools.loggers import errors, info
 
 
-common_router = Router()
-
-
 class TitleScreen(TextMessageConstructor):
     def __init__(self, user_id: str):
         super().__init__()
+
+    async def init(self):
+        keyboard_map = [
+            [
+                ButtonWidget(text="Run English", callback_data="run_english")
+            ]
+        ]
+        self.keyboard_map = keyboard_map
 
 
 class Scavenger:
@@ -61,9 +67,12 @@ class BotCommands:
         BotCommand(
             command="/exit", description=f"Закрыть {Emoji.ZZZ}"
         ),
+        # BotCommand(
+        #     command="/report", description=f"Отправить репорт {Emoji.BUG + Emoji.SHINE_STAR}"
+        # ),
         BotCommand(
-            command="/report", description=f"Отправить репорт {Emoji.BUG + Emoji.SHINE_STAR}"
-        ),
+            command="/offer_word", description=f"Предложить новое слово"
+        )
     ]
 
     @classmethod
@@ -74,13 +83,17 @@ class BotCommands:
     def exit(cls):
         return Command(cls.bot_commands[1].command.lstrip("/"))
 
+    # @classmethod
+    # def report(cls):
+    #     return Command(cls.bot_commands[2].command.lstrip("/"))
+
     @classmethod
-    def report(cls):
+    def offer_word(cls):
         return Command(cls.bot_commands[2].command.lstrip("/"))
 
 
 class BotControl:
-    bot = Bot(os.getenv("TOKEN"), parse_mode="HTML")
+    bot = Bot(os.getenv("TOKEN"), default=DefaultBotProperties(parse_mode='HTML'))
 
     def __init__(
             self, user_id: str, state: FSMContext | None = None, contextualize: bool = True
@@ -88,6 +101,7 @@ class BotControl:
         self._user_id = user_id
         self._state = state
         self.contextualize = contextualize
+        self.tuurngaid = Tuurngaid(user_id)
         self.user_storage = UserStorage(user_id)
         self._messages_pool = MessagesPool(user_id)
 
@@ -329,5 +343,4 @@ class BotControl:
             await self.update_text_message(
                 Info, f"Something broken {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"
             )
-
         return False
