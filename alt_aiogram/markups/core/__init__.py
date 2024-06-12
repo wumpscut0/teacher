@@ -1,5 +1,5 @@
 import os.path
-from typing import List, Self
+from typing import List, Self, Type
 
 from aiogram.types import FSInputFile
 from aiogram.utils.formatting import as_list, Text, Bold, Italic
@@ -239,7 +239,7 @@ class TextMessageConstructor(
         KeyboardMarkupConstructor.__init__(self)
         TextMarkupConstructor.__init__(self)
 
-    def merge(self, constructor: Self, only_emoji_text=False):
+    def merge(self, constructor: Type[Self], only_emoji_text=False):
         self.add_texts_rows(*constructor.text_map)
         for buttons_row in constructor.keyboard_map:
             self.add_buttons_in_new_row(*buttons_row, only_emoji_text=only_emoji_text)

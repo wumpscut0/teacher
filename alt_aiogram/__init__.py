@@ -7,12 +7,12 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, InputMediaPhoto, InputMediaAudio
+from aiogram.types import BotCommand, InputMediaPhoto, InputMediaAudio, FSInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 
 from alt_aiogram.markups.text_messages import Info
-from alt_aiogram.redis import UserStorage, MessagesPool, Tuurngaid
+from alt_aiogram.redis import ChatStorage, MessagesPool, Tuurngaid, OfferStorage
 from alt_aiogram.markups.core import TextMessageConstructor, PhotoMessageConstructor, VoiceMessageConstructor, \
     MessageConstructor, ButtonWidget, TextWidget
 
@@ -20,14 +20,31 @@ from tools.emoji import Emoji
 from tools.loggers import errors, info
 
 
-class TitleScreen(TextMessageConstructor):
-    def __init__(self, user_id: str):
+class PrivateTitleScreen(TextMessageConstructor):
+    def __init__(self):
         super().__init__()
 
     async def init(self):
         keyboard_map = [
             [
                 ButtonWidget(text="Run English", callback_data="run_english")
+            ]
+        ]
+        self.keyboard_map = keyboard_map
+
+
+class GroupTitleScreen(VoiceMessageConstructor):
+    def __init__(self):
+        super().__init__()
+
+    async def init(self):
+        self.voice = FSInputFile(os.path.join(os.path.dirname(__file__), "i_obey_you.ogg"))
+        keyboard_map = [
+            [
+                ButtonWidget(text="Get offer", callback_data="get_offer")
+            ],
+            [
+                ButtonWidget(text="Tuurngaid, you can go", callback_data="exit")
             ]
         ]
         self.keyboard_map = keyboard_map
@@ -67,9 +84,6 @@ class BotCommands:
         BotCommand(
             command="/exit", description=f"Закрыть {Emoji.ZZZ}"
         ),
-        # BotCommand(
-        #     command="/report", description=f"Отправить репорт {Emoji.BUG + Emoji.SHINE_STAR}"
-        # ),
         BotCommand(
             command="/offer_word", description=f"Предложить новое слово"
         )
@@ -83,10 +97,6 @@ class BotCommands:
     def exit(cls):
         return Command(cls.bot_commands[1].command.lstrip("/"))
 
-    # @classmethod
-    # def report(cls):
-    #     return Command(cls.bot_commands[2].command.lstrip("/"))
-
     @classmethod
     def offer_word(cls):
         return Command(cls.bot_commands[2].command.lstrip("/"))
@@ -96,27 +106,24 @@ class BotControl:
     bot = Bot(os.getenv("TOKEN"), default=DefaultBotProperties(parse_mode='HTML'))
 
     def __init__(
-            self, user_id: str, state: FSMContext | None = None, contextualize: bool = True
+            self, chat_id: str, state: FSMContext | None = None, contextualize: bool = True
     ):
-        self._user_id = user_id
+        self._chat_id = chat_id
         self._state = state
         self.contextualize = contextualize
-        self.tuurngaid = Tuurngaid(user_id)
-        self.user_storage = UserStorage(user_id)
-        self._messages_pool = MessagesPool(user_id)
+        self.chat_storage = ChatStorage(chat_id)
+        self._messages_pool = MessagesPool(chat_id)
+        self.tuurngaid = Tuurngaid(chat_id)
+        self.offer_storage = OfferStorage()
 
     @property
-    def user_id(self):
-        return str(self._user_id)
-
-    @property
-    def context(self):
-        return self.user_storage.context
+    def chat_id(self):
+        return str(self._chat_id)
 
     async def set_context(
-            self, initializer: type[MessageConstructor], *args, auto_return: bool = False, **kwargs
+            self, initializer: type[MessageConstructor], *args, auto_return: bool = True, **kwargs
     ):
-        self.user_storage.context = initializer, args, kwargs
+        self.chat_storage.context = initializer, args, kwargs
         if auto_return:
             await self.return_to_context()
 
@@ -129,11 +136,11 @@ class BotControl:
 
         try:
             message = await self.bot.send_message(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 text=markup.text,
                 reply_markup=markup.keyboard,
             )
-            await Scavenger.add_target(chat_id=self._user_id, message_id=message.message_id)
+            await Scavenger.add_target(chat_id=self._chat_id, message_id=message.message_id)
             self._messages_pool.add_message_id_to_the_chat_pull(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
@@ -158,7 +165,7 @@ class BotControl:
 
         try:
             await self.bot.edit_message_text(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 message_id=last_message_id,
                 text=markup.text,
                 reply_markup=markup.keyboard,
@@ -179,12 +186,12 @@ class BotControl:
             await self._contextualize_chat()
         try:
             message = await self.bot.send_photo(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 photo=markup.photo,
                 caption=markup.text,
                 reply_markup=markup.keyboard,
             )
-            await Scavenger.add_target(chat_id=self._user_id, message_id=message.message_id, await_time=1)
+            await Scavenger.add_target(chat_id=self._chat_id, message_id=message.message_id, await_time=1)
             self._messages_pool.add_message_id_to_the_chat_pull(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
@@ -207,12 +214,12 @@ class BotControl:
 
         try:
             await self.bot.edit_message_media(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 message_id=last_message_id,
                 media=InputMediaPhoto(media=markup.photo),
             )
             await self.bot.edit_message_caption(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 message_id=last_message_id,
                 caption=markup.text,
                 reply_markup=markup.keyboard
@@ -234,12 +241,12 @@ class BotControl:
 
         try:
             message = await self.bot.send_voice(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 voice=markup.voice,
                 caption=markup.text,
                 reply_markup=markup.keyboard
             )
-            await Scavenger.add_target(chat_id=self._user_id, message_id=message.message_id)
+            await Scavenger.add_target(chat_id=self._chat_id, message_id=message.message_id)
             self._messages_pool.add_message_id_to_the_chat_pull(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
@@ -262,7 +269,7 @@ class BotControl:
 
         try:
             await self.bot.edit_message_media(
-                chat_id=self._user_id,
+                chat_id=self._chat_id,
                 message_id=last_message_id,
                 media=InputMediaAudio(media=markup.voice),
                 reply_markup=markup.keyboard,
@@ -273,7 +280,7 @@ class BotControl:
 
     async def return_to_context(self):
         try:
-            initializer, args, kwargs = self.user_storage.context
+            initializer, args, kwargs = self.chat_storage.context
             if TextMessageConstructor in initializer.__bases__:
                 await self.update_text_message(
                     initializer, *args, **kwargs
@@ -295,19 +302,11 @@ class BotControl:
                 )
                 raise ValueError
         except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
-            errors.exception(f"broken contex")
-            await self.set_context(TitleScreen, self.user_id)
-            await self.update_text_message(
-                Info, f"Something happened {Emoji.CRYING_CAT} Sorry"
-            )
-
-    async def send_message_to_admin(self, message: str):
-        storage = UserStorage(self.user_id)
-        message = f"Reply from {storage.name}\n" f"{message}"
-        try:
-            await self.bot.send_message(chat_id=os.getenv("GROUP_ID"), text=message)
-        except TelegramBadRequest:
-            errors.exception(f"Failed sending message to admin: {message}")
+            errors.warning(f"broken contex", exc_info=True)
+            if self.chat_id.startswith("-"):
+                await self.set_context(GroupTitleScreen)
+            else:
+                await self.set_context(PrivateTitleScreen)
 
     async def _contextualize_chat(self):
         for chat_message_id in self._messages_pool.chat_messages_ids_pull[:-1]:
@@ -315,7 +314,7 @@ class BotControl:
 
     async def delete_message(self, message_id: int):
         try:
-            await self.bot.delete_message(self._user_id, message_id)
+            await self.bot.delete_message(self._chat_id, message_id)
         except TelegramBadRequest:
             pass
         self._messages_pool.remove_message_id_form_the_chat_pull(message_id)
@@ -325,8 +324,8 @@ class BotControl:
             return True
 
         if code == 401:
-            info.warning(f"Trying unauthorized access. User: {self.user_id}")
-            await self.set_context(TitleScreen, self.user_id)
+            info.warning(f"Trying unauthorized access. User: {self.chat_id}")
+            await self.set_context(PrivateTitleScreen, self.chat_id)
             await self.update_text_message(
                 Info,
                 f"Your session expired {Emoji.CRYING_CAT} Please, sign in again {Emoji.DOOR}"

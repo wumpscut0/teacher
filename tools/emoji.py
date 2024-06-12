@@ -91,3 +91,5 @@ class Emoji:
     HOME = "🏠"
     WOMAN_MAN = "👫"
     CHILD = "👶"
+    OPEN_BOOK = "📖"
+

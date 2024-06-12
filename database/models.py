@@ -1,18 +1,13 @@
 from datetime import datetime
+from typing import List
 
 from pydantic import BaseModel
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, ARRAY
 from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     ...
-
-
-# class UserDictionary(Base):
-#     __tablename__ = "user_dictionary"
-#     user_id = Column(String, ForeignKey("user.id"))
-#     word_id = Column(String, ForeignKey("dictionary.id"))
 
 
 class EnglishRun(Base):
@@ -31,13 +26,13 @@ class User(Base):
 
 class WordModel(BaseModel):
     eng: str
-    rus: str
+    translate: List[str]
 
 
 class Word(Base):
     __tablename__ = "word"
     eng = Column(String, nullable=False, primary_key=True)
-    rus = Column(String, nullable=False, primary_key=True)
+    translate = Column(ARRAY(String), nullable=False, primary_key=True)
 
     def as_model(self):
         return WordModel(**{c.name: getattr(self, c.name) for c in self.__table__.columns})

@@ -4,7 +4,7 @@ from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from alt_aiogram import BotControl, UserStorage, Info
+from alt_aiogram import BotControl, ChatStorage, Info
 from tools.emoji import Emoji
 from tools.loggers import errors
 
@@ -31,23 +31,23 @@ class BuildBotControl(BaseMiddleware):
 
     @classmethod
     async def _build_bot_control(cls, event, state: FSMContext):
-        user_id = await cls._extract_user_id(event)
-        bot_control = BotControl(str(user_id), state)
-        user_storage = UserStorage(str(user_id))
+        chat_id = await cls._extract_chat_id(event)
+        bot_control = BotControl(str(chat_id), state)
+        user_storage = ChatStorage(str(chat_id))
         user_storage.name = await cls._extract_first_name(event)
         return bot_control
 
     @classmethod
-    async def _extract_user_id(cls, event: Update):
+    async def _extract_chat_id(cls, event: Update):
         try:
-            user_id = event.message.chat.id
+            chat_id = event.message.chat.id
         except AttributeError:
-            user_id = event.callback_query.message.chat.id
-        return user_id
+            chat_id = event.callback_query.message.chat.id
+        return chat_id
 
     @classmethod
     async def _extract_first_name(cls, event: Update):
-        await cls._extract_user_id(event)
+        await cls._extract_chat_id(event)
         try:
             first_name = event.message.from_user.full_name
         except AttributeError:
