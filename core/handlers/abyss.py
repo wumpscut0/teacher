@@ -3,9 +3,9 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from alt_aiogram import Info, BotControl
-from alt_aiogram.markups.text_messages import Input
-from tools.emoji import Emoji
+from core import Info, BotControl
+from core.markups.text_messages import Input
+from core.tools.emoji import Emoji
 
 abyss_router = Router()
 

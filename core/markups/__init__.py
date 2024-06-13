@@ -10,7 +10,7 @@ from abc import ABC
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
 
-from tools.emoji import Emoji
+from core.tools.emoji import Emoji
 
 
 class TextWidget:
@@ -30,9 +30,7 @@ class TextWidget:
     @property
     def text(self):
         if self.mark_left:
-            # separator = '' if str(self._text).startswith(self.separator) else self.separator
             return Text(self.mark) + Text(self.sep) + Bold(self._text)
-        # separator = '' if str(self._text).endswith(self.separator) else self.separator
         return Bold(self._text) + Text(self.sep) + Text(self.mark)
 
     @text.setter
@@ -81,7 +79,6 @@ class ButtonWidget:
 
     @property
     def text(self):
-        # separator = '' if str(self._text).startswith(' ') else ' '
         if self.mark_left:
             return self.mark + self.sep + self._text
         return self._text + self.sep + self.mark
@@ -140,6 +137,10 @@ class KeyboardMarkupConstructor:
     def keyboard_map(self, map_: List[List[ButtonWidget]]):
         self._keyboard_map = map_
 
+    def merge(self, keyboard_map: Type[Self]):
+        for row in keyboard_map:
+            self.add_buttons_in_new_row(*row)
+
     def add_button_in_last_row(self, buttons: ButtonWidget, only_emoji_text=False):
         if only_emoji_text:
             limitations_row = self._limitation_row_with_emoji
@@ -191,39 +192,6 @@ class KeyboardMarkupConstructor:
         return markup.as_markup()
 
 
-class PhotoMarkupConstructor:
-
-    def __init__(self, photo: str | FSInputFile | None = None):
-        super().__init__()
-        self._photo = photo
-
-    @property
-    def photo(self):
-        if not self._photo:
-            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_photo.jpg"))
-        return self._photo
-
-    @photo.setter
-    def photo(self, photo: str | FSInputFile):
-        self._photo = photo
-
-
-class VoiceMarkupConstructor:
-    def __init__(self, voice: str | FSInputFile | None = None):
-        super().__init__()
-        self._voice = voice
-
-    @property
-    def voice(self):
-        if self._voice is None:
-            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_audio.ogg"))
-        return self._voice
-
-    @voice.setter
-    def voice(self, voice: str | FSInputFile):
-        self._voice = voice
-
-
 class MessageConstructor(ABC):
     async def init(self):
         ...
@@ -239,42 +207,55 @@ class TextMessageConstructor(
         KeyboardMarkupConstructor.__init__(self)
         TextMarkupConstructor.__init__(self)
 
-    def merge(self, constructor: Type[Self], only_emoji_text=False):
-        self.add_texts_rows(*constructor.text_map)
-        for buttons_row in constructor.keyboard_map:
-            self.add_buttons_in_new_row(*buttons_row, only_emoji_text=only_emoji_text)
-
 
 class PhotoMessageConstructor(
     TextMessageConstructor,
-    PhotoMarkupConstructor,
     MessageConstructor,
 
 ):
-    def __init__(self, state: State | None = None):
+    def __init__(self, photo: str | FSInputFile | None = None, state: State | None = None):
         self.state = state
-        PhotoMarkupConstructor.__init__(self)
-        TextMessageConstructor.__init__(self)
+        self._photo = photo
+        super().__init__()
+
+    @property
+    def photo(self):
+        if not self._photo:
+            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_photo.jpg"))
+        return self._photo
+
+    @photo.setter
+    def photo(self, photo: str | FSInputFile):
+        self._photo = photo
 
     @property
     def text(self):
         text = super().text
-        if text != Emoji.BAN:
-            return text
+        if text == Emoji.BAN:
+            return None
 
 
 class VoiceMessageConstructor(
     TextMessageConstructor,
-    VoiceMarkupConstructor,
     MessageConstructor,
 ):
-    def __init__(self, state: State | None = None):
+    def __init__(self, voice: str | FSInputFile | None = None, state: State | None = None):
         self.state = state
-        TextMarkupConstructor.__init__(self)
-        VoiceMarkupConstructor.__init__(self)
+        self._voice = voice
+        super().__init__()
+
+    @property
+    def voice(self):
+        if self._voice is None:
+            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_audio.ogg"))
+        return self._voice
+
+    @voice.setter
+    def voice(self, voice: str | FSInputFile):
+        self._voice = voice
 
     @property
     def text(self):
         text = super().text
-        if text != Emoji.BAN:
-            return text
+        if text == Emoji.BAN:
+            return None

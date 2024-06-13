@@ -1,14 +1,28 @@
 import asyncio
+import os
 
-from alt_aiogram import BotControl, BotCommands
-from alt_aiogram.dispatcher import dispatcher
-from database.queries import create_all
+from cache import Cache
+from database.queries import drop_all, create_all
+from markups import PrivateTuurngaidTitleScreen, GroupPartyTitleScreen
+from core.dispatcher import BuildBot
+from group_handlers import party_router
+from private_handlers import english_router
+from private_handlers.commands import commands_router, BotCommands
 
 
 async def main():
+    # await drop_all()
     # await create_all()
-    await BotControl.bot.set_my_commands(BotCommands.bot_commands)
-    await dispatcher.start_polling(BotControl.bot)
+    await BuildBot(
+        commands_router,
+        english_router,
+        party_router,
+        token=os.getenv("TOKEN"),
+        private_title_screen=PrivateTuurngaidTitleScreen,
+        group_title_screen=GroupPartyTitleScreen,
+        cache=Cache
+    ).start_polling(BotCommands.commands())
+
 
 if __name__ == "__main__":
     asyncio.run(main())

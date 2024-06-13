@@ -1,16 +1,16 @@
 import random
 
-from aiogram import Router, F
+from aiogram import F
 from aiogram.types import CallbackQuery
 
-from alt_aiogram.FSM import States
-from alt_aiogram.markups.text_messages import Input
-from alt_aiogram.redis import Tuurngaid
+import cache
+from FSM import States
+from core.markups.text_messages import Input
 from database.queries import select_words
-from alt_aiogram import BotControl, Info
-from tools import Emoji
+from core import BotControl, Info, Routers
+from core.tools import Emoji
 
-english_router = Router()
+english_router = Routers.private()
 
 
 @english_router.callback_query(F.data == "run_english")
@@ -29,7 +29,7 @@ async def run_english(callback: CallbackQuery, bot_control: BotControl):
         return
 
     index = random.randint(0, len(words) - 1)
-    bot_control.tuurngaid.word_index = index
+    cache.word_index = index
     word = words[index]
 
     side = random.randint(0, 1)

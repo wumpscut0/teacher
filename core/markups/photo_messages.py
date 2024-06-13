@@ -1,8 +1,8 @@
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import FSInputFile
 
-from alt_aiogram import PhotoMessageConstructor, TextWidget, ButtonWidget
-from tools import Emoji
+from core.markups import PhotoMessageConstructor, TextWidget, ButtonWidget
+from core.tools import Emoji
 
 
 class Photo(PhotoMessageConstructor):

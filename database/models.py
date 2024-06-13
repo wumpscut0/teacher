@@ -32,7 +32,7 @@ class WordModel(BaseModel):
 class Word(Base):
     __tablename__ = "word"
     eng = Column(String, nullable=False, primary_key=True)
-    translate = Column(ARRAY(String), nullable=False, primary_key=True)
+    translate = Column(ARRAY(String), nullable=False)
 
     def as_model(self):
         return WordModel(**{c.name: getattr(self, c.name) for c in self.__table__.columns})

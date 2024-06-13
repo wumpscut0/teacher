@@ -1,7 +1,7 @@
 from aiogram.filters.callback_data import CallbackData
 
-from alt_aiogram.markups.core import KeyboardMarkupConstructor, ButtonWidget
-from tools import Emoji
+from core.markups import KeyboardMarkupConstructor, ButtonWidget
+from core.tools import Emoji
 
 
 class LeftRight(KeyboardMarkupConstructor):

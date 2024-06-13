@@ -1,9 +1,8 @@
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
 
-from alt_aiogram.markups.core import TextMessageConstructor, TextWidget, ButtonWidget
-from tools import Emoji
-
+from core.markups import TextMessageConstructor, TextWidget, ButtonWidget
+from core.tools import Emoji
 
 
 class Info(TextMessageConstructor):

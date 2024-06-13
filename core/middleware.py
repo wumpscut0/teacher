@@ -1,23 +1,38 @@
-from typing import Any, Dict, Callable, Awaitable
+from typing import Any, Dict, Callable, Awaitable, Type
 
-from aiogram import BaseMiddleware
+from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from alt_aiogram import BotControl, ChatStorage, Info
-from tools.emoji import Emoji
-from tools.loggers import errors
+from core import BotControl, Info, MessageConstructor
+from core.redis import PrivateStorage
+from core.tools.emoji import Emoji
+from core.tools.loggers import errors
 
 
 class BuildBotControl(BaseMiddleware):
+    def __init__(
+            self,
+            bot: Bot,
+            private_title_screen: Type[MessageConstructor],
+            group_title_screen: Type[MessageConstructor],
+            cache: Type[PrivateStorage],
+    ):
+        self._bot = bot
+        self._private_title_screen = private_title_screen
+        self._group_title_screen = group_title_screen
+        self._cache = cache
+
     async def __call__(
             self,
             handler: Callable[[Update, Dict[str, Any]], Awaitable[Any]],
             event: Update,
             data: Dict[str, Any],
     ) -> Any:
-        bot_control = await self._build_bot_control(event, data["state"])
+        chat_id = str(await self._extract_chat_id(event))
+        bot_control = await self._build_bot_control(event, data["state"], chat_id)
         data["bot_control"] = bot_control
+        data["cache"] = self._cache(chat_id)
         try:
             return await handler(event, data)
         except BaseException as e:
@@ -29,12 +44,16 @@ class BuildBotControl(BaseMiddleware):
             )
             raise e
 
-    @classmethod
-    async def _build_bot_control(cls, event, state: FSMContext):
-        chat_id = await cls._extract_chat_id(event)
-        bot_control = BotControl(str(chat_id), state)
-        user_storage = ChatStorage(str(chat_id))
-        user_storage.name = await cls._extract_first_name(event)
+    async def _build_bot_control(self, event, state: FSMContext, chat_id: str):
+        bot_control = BotControl(
+            self._bot,
+            chat_id,
+            state,
+            self._private_title_screen,
+            self._group_title_screen,
+        )
+
+        bot_control._chat_storage.name = await self._extract_first_name(event)
         return bot_control
 
     @classmethod

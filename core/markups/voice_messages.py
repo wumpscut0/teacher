@@ -1,6 +1,8 @@
+import os
+
 from aiogram.types import FSInputFile
 
-from alt_aiogram import VoiceMessageConstructor, ButtonWidget
+from core.markups import VoiceMessageConstructor, ButtonWidget
 
 
 class Voice(VoiceMessageConstructor):

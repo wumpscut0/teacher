@@ -5,7 +5,7 @@ import base64
 from math import ceil
 from typing import Iterable, TypeVar, List
 
-from tools.emoji import Emoji
+from core.tools.emoji import Emoji
 
 T = TypeVar("T")
 
