@@ -16,11 +16,13 @@ class BuildBotControl(BaseMiddleware):
             bot: Bot,
             private_title_screen: Type[MessageConstructor],
             group_title_screen: Type[MessageConstructor],
+            hello_screen: Type[MessageConstructor],
             cache: Type[PrivateStorage],
     ):
         self._bot = bot
         self._private_title_screen = private_title_screen
         self._group_title_screen = group_title_screen
+        self._hello_screen = hello_screen
         self._cache = cache
 
     async def __call__(
@@ -33,6 +35,7 @@ class BuildBotControl(BaseMiddleware):
         bot_control = await self._build_bot_control(event, data["state"], chat_id)
         data["bot_control"] = bot_control
         data["cache"] = self._cache(chat_id)
+        data["hello"] = self._hello_screen
         try:
             return await handler(event, data)
         except BaseException as e:
@@ -52,7 +55,6 @@ class BuildBotControl(BaseMiddleware):
             self._private_title_screen,
             self._group_title_screen,
         )
-
         bot_control._chat_storage.name = await self._extract_first_name(event)
         return bot_control
 

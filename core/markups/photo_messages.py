@@ -14,9 +14,10 @@ class Photo(PhotoMessageConstructor):
     ):
         super().__init__()
         self.photo = photo
-        self._caption = TextWidget(text=caption)
+        self._caption = caption
         self._back = ButtonWidget(text=f"{Emoji.DENIAL} Закрыть", callback_data=back_callback_data)
 
     async def init(self):
-        self.add_texts_rows(self._caption)
+        if self._caption:
+            self.add_texts_rows(TextWidget(text=self._caption))
         self.add_button_in_new_row(self._back)

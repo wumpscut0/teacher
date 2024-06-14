@@ -81,19 +81,16 @@ class Scavenger:
 
     async def add_target(self, message_id: int, await_time: int = AWAIT_TIME_MESSAGE_DELETE):
         run_date = datetime.now() + timedelta(minutes=await_time)
-        print(f"Now date: {datetime.now()}\nWill be start at {run_date}")
         self.scheduler.add_job(
             self._delete_message,
             id=str(message_id) + self._bot_control.chat_id,
             replace_existing=True,
             args=(message_id,),
             trigger="date",
-            coalesce=True,
             run_date=run_date,
         )
 
     async def _delete_message(self, message_id: int):
-        print(f"Executed date: {datetime.now()}")
         await self._bot_control.delete_message(
             message_id
         )
@@ -111,6 +108,7 @@ class BotControl:
         self.chat_id = chat_id
         self._state = state
         self._chat_storage = ChatStorage(self.chat_id)
+        self.name = self._chat_storage.name
         self._messages_pool = MessagesPool(chat_id)
         self._bot = bot
         self._private_title_screen = private_title_screen
@@ -192,7 +190,6 @@ class BotControl:
     async def update_photo_message(self, photo_message_constructor: Type[PhotoMessageConstructor], *args, **kwargs):
         markup = photo_message_constructor(*args, **kwargs)
         await markup.init()
-
         if self._state is not None:
             await self._state.set_state(markup.state)
 
@@ -289,7 +286,7 @@ class BotControl:
                 )
                 raise ValueError
         except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
-            errors.warning(f"broken contex", exc_info=True)
+            errors.error(f"broken contex", exc_info=True)
             await self.reset_context()
 
     async def reset_context(self):

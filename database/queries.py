@@ -1,9 +1,9 @@
 from typing import List
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, delete
 from sqlalchemy.exc import IntegrityError
 
-from cache import OfferStorage
+from cache import EnglishRunStorage
 from database import Session, engine
 from database.models import User, Word, WordModel, Base
 from core.tools import Emoji
@@ -23,8 +23,9 @@ async def insert_user(user_id: str):
     try:
         async with Session.begin() as session:
             await session.execute(insert(User).values(id=user_id))
+        return True
     except IntegrityError:
-        pass
+        return False
 
 
 async def select_words() -> List[WordModel]:
@@ -32,14 +33,20 @@ async def select_words() -> List[WordModel]:
         return [word.as_model() for word in (await session.execute(select(Word))).scalars()]
 
 
-async def insert_new_words():
-    storage = OfferStorage()
-    words = []
-    for button in storage.offer_copy:
-        if button.mark == Emoji.TICK:
-            eng, translate = button.text.split(":")
-            words.append(Word(eng=eng, translate=translate.split(", ")))
-    async with Session.begin() as session:
-        session.add_all(words)
+async def insert_new_words(rewrite=False):
+    storage = EnglishRunStorage()
+    if rewrite:
+        async with Session.begin() as session:
+            await session.execute(delete(Word))
+        session.commit()
+    for button in storage.edit:
+        try:
+            async with Session.begin() as session:
+                if button.mark == Emoji.OK:
+                    eng, translate = button.text.split(":")
+                await session.execute(insert(Word).values(eng=eng.lstrip(f"{Emoji.OK} "), translate=translate.split(", ")))
+        except IntegrityError:
+            pass
+
     await session.commit()
-    storage.offer_copy = None
+    storage.edit = None

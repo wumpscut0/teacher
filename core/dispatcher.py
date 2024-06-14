@@ -25,10 +25,11 @@ class BuildBot:
             token: str,
             private_title_screen: Type[MessageConstructor],
             group_title_screen: Type[MessageConstructor],
+            hello_screen: Type[MessageConstructor],
             cache: Type[PrivateStorage]
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
-        self.dispatcher.update.middleware(BuildBotControl(self.bot, private_title_screen, group_title_screen, cache))
+        self.dispatcher.update.middleware(BuildBotControl(self.bot, private_title_screen, group_title_screen, hello_screen, cache))
         self.dispatcher.include_routers(default_commands_router, *routers, abyss_router)
         Scavenger.scheduler.start()
 

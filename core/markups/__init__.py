@@ -137,8 +137,8 @@ class KeyboardMarkupConstructor:
     def keyboard_map(self, map_: List[List[ButtonWidget]]):
         self._keyboard_map = map_
 
-    def merge(self, keyboard_map: Type[Self]):
-        for row in keyboard_map:
+    def merge(self, keyboard: Type[Self]):
+        for row in keyboard.keyboard_map:
             self.add_buttons_in_new_row(*row)
 
     def add_button_in_last_row(self, buttons: ButtonWidget, only_emoji_text=False):
@@ -233,6 +233,7 @@ class PhotoMessageConstructor(
         text = super().text
         if text == Emoji.BAN:
             return None
+        return text
 
 
 class VoiceMessageConstructor(
@@ -259,3 +260,4 @@ class VoiceMessageConstructor(
         text = super().text
         if text == Emoji.BAN:
             return None
+        return text

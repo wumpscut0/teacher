@@ -15,6 +15,16 @@ async def return_to_context(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.return_to_context()
 
 
+@abyss_router.callback_query(F.data == "reset_context")
+async def reset_context(message: Message, bot_control: BotControl):
+    await bot_control.reset_context()
+
+
+@abyss_router.callback_query(F.data == "exit")
+async def exit_(message: Message, bot_control: BotControl):
+    await bot_control.exit()
+
+
 @abyss_router.callback_query()
 async def callback_abyss(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.update_text_message(

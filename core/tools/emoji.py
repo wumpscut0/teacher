@@ -92,4 +92,5 @@ class Emoji:
     WOMAN_MAN = "👫"
     CHILD = "👶"
     OPEN_BOOK = "📖"
+    BOX = "📦"
 
