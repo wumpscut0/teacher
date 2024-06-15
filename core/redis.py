@@ -1,13 +1,13 @@
 import os
 import pickle
-from typing import Union, Any, Dict, Tuple
+from typing import Union, Any, List
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
 
-from core.markups import MessageConstructor
+from core import TextMessageConstructor
 
 load_dotenv(find_dotenv())
 
@@ -40,7 +40,7 @@ class CustomRedis(Redis):
         )
 
     def get(self, name: KeyT) -> ResponseT:
-        result = super().get(name)
+        result: Any = super().get(name)
         if result is not None:
             return pickle.loads(result)
 
@@ -60,75 +60,145 @@ class CustomRedis(Redis):
         pxat: Union[AbsExpiryT, None] = None,
         persist: bool = False,
     ) -> ResponseT:
-        result = super().getex(name, ex, px, exat, pxat, persist)
+        result: Any = super().getex(name, ex, px, exat, pxat, persist)
         if result is not None:
             return pickle.loads(result)
 
 
-STORAGE = CustomRedis(
+class Storage:
+    STORAGE = CustomRedis(
         host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT")), db=1
     )
 
+    def __init__(self, id_: str = ""):
+        self._id_ = id_
 
-class PrivateStorage:
-    def __init__(self, chat_id: str):
-        self._chat_id = chat_id
+    def __get(self, key: str, default: Any | None = None):
+        value = self.STORAGE.get(f"{key}:{self._id_}")
+        if value is None:
+            return default
+        return value
+
+    def __set(self, key: str, value: Any):
+        self.STORAGE.set(f"{key}:{self._id_}", value)
 
 
-class ChatStorage(PrivateStorage):
+class TitleScreens(Storage):
+    def __init__(self, bot_id: str | int):
+        super().__init__(bot_id)
+
+    @property
+    def private_title_screen(self) -> TextMessageConstructor:
+        return self.__get(f"private_title_screen")
+
+    @private_title_screen.setter
+    def private_title_screen(self, private_title_screen: TextMessageConstructor):
+        self.__set("private_title_screen", private_title_screen)
+
+    @property
+    def group_title_screen(self) -> TextMessageConstructor:
+        return self.__get(f"group_title_screen")
+
+    @group_title_screen.setter
+    def group_title_screen(self, group_title_screen: TextMessageConstructor):
+        self.__set("group_title_screen", group_title_screen)
+
+    @property
+    def greetings(self) -> TextMessageConstructor:
+        return self.__get(f"greetings")
+
+    @greetings.setter
+    def greetings(self, greetings: TextMessageConstructor):
+        self.__set("greetings", greetings)
+
+
+class UserStorage(Storage):
+    def __init__(self, user_id: str | int):
+        super().__init__(user_id)
+
     @property
     def name(self):
-        return STORAGE.get(f"name:{self._chat_id}")
+        return self.__get("name", "Unknown")
 
     @name.setter
     def name(self, data: Any):
-        STORAGE.set(f"name:{self._chat_id}", data)
+        self.__set("name", data)
+
+
+class ContextStorage(Storage):
+    def __init__(self, chat_id: str | int, bot_id: str | int):
+        super().__init__(chat_id + bot_id)
 
     @property
-    def context(self):
-        return STORAGE.get(f"context:{self._chat_id}")
+    def _context_stack(self) -> List[TextMessageConstructor]:
+        return self.__get(f"context_stack", [])
 
-    @context.setter
-    def context(self, context: Tuple[MessageConstructor, Tuple[Any, ...], Dict[str, Any]]):
-        STORAGE.set(f"context:{self._chat_id}", context)
-
-
-class MessagesPool(PrivateStorage):
-    @property
-    def chat_messages_ids_pull(self):
-        pull = STORAGE.get(f"chat_messages_ids_pull:{self._chat_id}")
-        if pull is None:
-            return []
-        return pull
+    @_context_stack.setter
+    def _context_stack(self, context_stack):
+        self.__set("context_stack", context_stack)
 
     @property
-    def last_message_id_from_the_chat(self):
-        try:
-            return self.chat_messages_ids_pull[-1]
-        except IndexError:
-            pass
+    def look_around(self):
+        stack = self._context_stack
+        if not stack:
+            return
+        return stack[-1]
 
-    def add_message_id_to_the_chat_pull(self, message_id: int):
+    def dream(self, markup):
+        stack = self._context_stack
+        if not stack:
+            return
+        stack[-1] = markup
+        self._context_stack = stack
+        return markup
+
+    def dig(self, *markups: TextMessageConstructor):
+        stack = self._context_stack
+        stack.extend(markups)
+        self._context_stack = stack
+        return self.look_around
+
+    def bury(self) -> TextMessageConstructor | None:
+        stack = self._context_stack
+        if not stack:
+            return
+        markup = stack.pop()
+        self._context_stack = stack
+        return markup
+
+    def come_out(self, markup: TextMessageConstructor):
+        self._context_stack = [markup]
+
+    @property
+    def chat_messages_ids_pull(self) -> [int]:
+        return self.__get("chat_messages_ids_pull", [])
+
+    @chat_messages_ids_pull.setter
+    def chat_messages_ids_pull(self, data: Any):
+        self.__set("chat_messages_ids_pull", data)
+
+    @property
+    def last_message_id(self) -> int | None:
+        pull = self.chat_messages_ids_pull
+        if not pull:
+            return
+        return pull[-1]
+
+    def add_message_id(self, message_id: int):
         pull = self.chat_messages_ids_pull
         pull.append(message_id)
         self.chat_messages_ids_pull = pull
 
-    def pop_last_message_id_from_the_chat_pull(self):
+    def pop_message_id(self):
         pull = self.chat_messages_ids_pull
-        try:
+        if pull:
             pull.pop()
             self.chat_messages_ids_pull = pull
-        except IndexError:
-            pass
 
-    def remove_message_id_form_the_chat_pull(self, message_id: int):
+    def remove_message_id(self, message_id: int):
         pull = self.chat_messages_ids_pull
         try:
             pull.remove(message_id)
             self.chat_messages_ids_pull = pull
         except ValueError:
             pass
-
-    @chat_messages_ids_pull.setter
-    def chat_messages_ids_pull(self, data: Any):
-        STORAGE.set(f"chat_messages_ids_pull:{self._chat_id}", data)

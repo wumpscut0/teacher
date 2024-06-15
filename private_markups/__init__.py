@@ -6,12 +6,12 @@ from aiogram.types import FSInputFile
 
 from FSM import States
 from cache import Cache
-from core import ButtonWidget, PhotoMessageConstructor, TextMessageConstructor, Emoji
+from core import ButtonWidget, PhotoTextMessageConstructor, TextMessageConstructor, Emoji
 from core.markups import DataTextWidget, TextWidget
 from core.markups.photo_messages import Photo
 
 
-class Greetings(PhotoMessageConstructor):
+class Greetings(PhotoTextMessageConstructor):
     def __init__(self):
         super().__init__()
         self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/Tuurngide.jpg"))
@@ -19,7 +19,7 @@ class Greetings(PhotoMessageConstructor):
         self.add_buttons_in_new_row(ButtonWidget(text="Ok", callback_data="reset_context"))
 
 
-class PrivateTuurngaidTitleScreen(PhotoMessageConstructor):
+class PrivateTuurngaidTitleScreen(PhotoTextMessageConstructor):
     def __init__(self):
         super().__init__()
         self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/lV7-nxj4P_o.jpg"))
@@ -57,10 +57,10 @@ class Translate(TextMessageConstructor):
                 flip_card = f"Correct {Emoji.OK}\n\n"
                 self._cache.score += 1
                 if self._cache.score == 5:
-                    await self._bot_control.create_photo_message(Photo, FSInputFile(
+                    await self._bot_control._create_photo_message(Photo, FSInputFile(
                         os.path.join(os.path.dirname(__file__), "../images/5.jpg")))
                 elif self._cache.score == 10:
-                    await self._bot_control.create_photo_message(Photo, FSInputFile(
+                    await self._bot_control._create_photo_message(Photo, FSInputFile(
                         os.path.join(os.path.dirname(__file__), "../images/10.jpg")))
         else:
             flip_card = ""

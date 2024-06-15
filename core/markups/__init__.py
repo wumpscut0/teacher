@@ -5,8 +5,6 @@ from aiogram.types import FSInputFile
 from aiogram.utils.formatting import as_list, Text, Bold, Italic
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from abc import ABC
-
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
 
@@ -192,27 +190,21 @@ class KeyboardMarkupConstructor:
         return markup.as_markup()
 
 
-class MessageConstructor(ABC):
-    async def init(self):
-        ...
-
-
 class TextMessageConstructor(
     TextMarkupConstructor,
     KeyboardMarkupConstructor,
-    MessageConstructor,
+
 ):
     def __init__(self, state: State | None = None):
         self.state = state
         KeyboardMarkupConstructor.__init__(self)
         TextMarkupConstructor.__init__(self)
 
+    def init(self):
+        ...
 
-class PhotoMessageConstructor(
-    TextMessageConstructor,
-    MessageConstructor,
 
-):
+class PhotoTextMessageConstructor(TextMessageConstructor):
     def __init__(self, photo: str | FSInputFile | None = None, state: State | None = None):
         self.state = state
         self._photo = photo
@@ -236,10 +228,7 @@ class PhotoMessageConstructor(
         return text
 
 
-class VoiceMessageConstructor(
-    TextMessageConstructor,
-    MessageConstructor,
-):
+class VoiceTextMessageConstructor(TextMessageConstructor):
     def __init__(self, voice: str | FSInputFile | None = None, state: State | None = None):
         self.state = state
         self._voice = voice
@@ -261,3 +250,28 @@ class VoiceMessageConstructor(
         if text == Emoji.BAN:
             return None
         return text
+
+
+class Buttons:
+    @staticmethod
+    def back(text: str = Emoji.BACK):
+        return ButtonWidget(text=text, callback_data="bury")
+
+    @staticmethod
+    def left(callback_data: str | CallbackData, text: str = Emoji.LEFT, mark: str = "", ):
+        return ButtonWidget(
+            text=text, mark=mark, sep="", callback_data=callback_data
+        )
+
+    @staticmethod
+    def right(callback_data: str | CallbackData, text: str = Emoji.LEFT, mark: str = ""):
+        return ButtonWidget(
+            text=text, mark=mark, sep="", callback_data=callback_data, mark_left=False
+        )
+
+
+class Texts:
+    @staticmethod
+    def error_loading_data():
+        return TextWidget(text=f"Error during data loading {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry")
+

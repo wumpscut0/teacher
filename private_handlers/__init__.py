@@ -20,7 +20,7 @@ english_router = Routers.private()
 async def run_english(callback: CallbackQuery, bot_control: BotControl, cache: Cache):
     words = await select_words()
     cache.words = words
-    await bot_control.update_text_message(
+    await bot_control._update_text_message(
         Input,
         f"How many words do you want to repeat?\nEnter a integer at 1 to {len(words)}",
         state=States.input_text_how_many_words
@@ -34,14 +34,14 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
     try:
         value = int(value)
     except ValueError:
-        await bot_control.update_text_message(
+        await bot_control._update_text_message(
             Input,
             f"\nHow many words do you want to repeat?\nEnter a integer at 1 to {len(cache.words)}",
             state=States.input_text_how_many_words
         )
         return
     if not 1 <= value <= len(cache.words):
-        await bot_control.update_text_message(
+        await bot_control._update_text_message(
             Input,
             f"\nHow many words do you want to repeat?\nEnter a integer at 1 to {len(cache.words)}",
             state=States.input_text_how_many_words
@@ -51,7 +51,7 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
     words = [[word.eng, ', '.join(word.translate)] for word in cache.words]
     words.extend([[translate, eng] for eng, translate in words])
     if not words:
-        await bot_control.update_text_message(Info, f"No words so far {Emoji.CRYING_CAT}\n"
+        await bot_control._update_text_message(Info, f"No words so far {Emoji.CRYING_CAT}\n"
                                                     f"You can offer a new word /offer_word")
         return
 
@@ -59,7 +59,7 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
     cache.score = 0
     random.shuffle(words)
     cache.words = words
-    word = cache.extract_word
+    word = cache.pop_word
     cache.current_word = word
     await bot_control.set_context(
         Translate, cache, new_word=word
@@ -70,6 +70,6 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
 async def accept_input_text_word_translate(message: Message, bot_control: BotControl, cache: Cache):
     answer = message.text
     await message.delete()
-    word = cache.extract_word
+    word = cache.pop_word
     await bot_control.set_context(Translate, cache, answer=answer, new_word=word)
     cache.current_word = word

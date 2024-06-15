@@ -1,7 +1,7 @@
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
 
-from core.markups import TextMessageConstructor, TextWidget, ButtonWidget
+from core.markups import TextMessageConstructor, TextWidget, ButtonWidget, Buttons
 from core.tools import Emoji
 
 
@@ -9,25 +9,11 @@ class Info(TextMessageConstructor):
     def __init__(
         self,
         text: str,
-        ok_text: str = "Ok",
-        back_callback_data: str | CallbackData = "return_to_context",
+        back_text: str = "Ok",
     ):
         super().__init__()
-        self.info = TextWidget(text=text)
-        self.ok = ButtonWidget(text=ok_text, callback_data=back_callback_data)
-
-    async def init(self):
-        self.add_texts_rows(self.info)
-        self.add_button_in_last_row(self.ok)
-
-
-class ErrorInfo(Info):
-    def __init__(
-        self,
-        text: str = f"Error during data loading {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry",
-        back_callback_data: str | CallbackData = "return_to_context",
-    ):
-        super().__init__(text, back_callback_data)
+        self.add_texts_rows(TextWidget(text=text))
+        self.add_button_in_last_row(Buttons.back(back_text))
 
 
 class Temp(TextMessageConstructor):
@@ -36,10 +22,7 @@ class Temp(TextMessageConstructor):
         text: str = f"{Emoji.HOURGLASS_START} Processing...",
     ):
         super().__init__()
-        self.temp = TextWidget(text=text)
-
-    async def init(self):
-        self.add_texts_rows(self.temp)
+        self.add_texts_rows(TextWidget(text=text))
 
 
 class Input(TextMessageConstructor):
@@ -48,16 +31,11 @@ class Input(TextMessageConstructor):
         text: str,
         *,
         back_text: str = f"{Emoji.DENIAL} Cancel",
-        back_callback_data: str | CallbackData = "return_to_context",
         state: State | None = None,
     ):
         super().__init__(state)
-        self.info = TextWidget(text=text)
-        self.back = ButtonWidget(text=back_text, callback_data=back_callback_data)
-
-    async def init(self):
-        self.add_texts_rows(self.info)
-        self.add_button_in_new_row(self.back)
+        self.add_texts_rows(TextWidget(text=text))
+        self.add_button_in_new_row(Buttons.back(text=back_text))
 
 
 class Conform(TextMessageConstructor):
@@ -68,13 +46,10 @@ class Conform(TextMessageConstructor):
         *,
         yes_text: str = f"{Emoji.OK} Yes",
         no_text: str = f"{Emoji.DENIAL} No",
-        no_callback_data: str | CallbackData = "return_to_context",
     ):
         super().__init__()
-        self.info = TextWidget(text=text)
-        self.yes = ButtonWidget(text=yes_text, callback_data=yes_callback_data)
-        self.no = ButtonWidget(text=no_text, callback_data=no_callback_data)
-
-    async def init(self):
-        self.add_texts_rows(self.info)
-        self.add_buttons_in_new_row(self.yes, self.no)
+        self.add_texts_rows(TextWidget(text=text))
+        self.add_buttons_in_new_row(
+            ButtonWidget(text=yes_text, callback_data=yes_callback_data),
+            Buttons.back(text=no_text)
+        )

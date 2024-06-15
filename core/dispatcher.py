@@ -4,9 +4,9 @@ from typing import Type, List
 from aiogram import Dispatcher, Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, Redis
-from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeAllGroupChats
+from aiogram.types import BotCommand
 
-from core import MessageConstructor, PrivateStorage, BotCommands, Scavenger
+from core import TextMessageConstructor, BotCommands, SCHEDULER, UserStorage
 from core.handlers.abyss import abyss_router
 from core.handlers.commands import default_commands_router
 from core.middleware import BuildBotControl
@@ -23,15 +23,21 @@ class BuildBot:
             self,
             *routers,
             token: str,
-            private_title_screen: Type[MessageConstructor],
-            group_title_screen: Type[MessageConstructor],
-            hello_screen: Type[MessageConstructor],
-            cache: Type[PrivateStorage]
+            private_title_screen: TextMessageConstructor,
+            group_title_screen: TextMessageConstructor,
+            hello_screen: TextMessageConstructor,
+            cache: Type[UserStorage]
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
-        self.dispatcher.update.middleware(BuildBotControl(self.bot, private_title_screen, group_title_screen, hello_screen, cache))
+        self.dispatcher.update.middleware(BuildBotControl(
+            self.bot,
+            private_title_screen,
+            group_title_screen,
+            hello_screen,
+            cache
+        ))
         self.dispatcher.include_routers(default_commands_router, *routers, abyss_router)
-        Scavenger.scheduler.start()
+        SCHEDULER.scheduler.start()
 
     async def start_polling(self, custom_commands: List[BotCommand]):
         commands = BotCommands.commands()

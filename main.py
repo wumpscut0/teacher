@@ -10,8 +10,6 @@ from group_handlers import party_router
 from private_handlers import english_router
 from private_handlers.commands import commands_router, BotCommands
 
-# TODO integrity stack-context
-
 
 async def main():
     # await drop_all()

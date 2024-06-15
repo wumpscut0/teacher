@@ -2,14 +2,11 @@ import os
 
 from aiogram.types import FSInputFile
 
-from core.markups import VoiceMessageConstructor, ButtonWidget
+from core.markups import VoiceTextMessageConstructor, ButtonWidget, Buttons
 
 
-class Voice(VoiceMessageConstructor):
-    def __init__(self, voice: str | FSInputFile):
+class Voice(VoiceTextMessageConstructor):
+    def __init__(self, voice: str | FSInputFile, back_text="Ok"):
         super().__init__()
         self.voice = voice
-        self._back = ButtonWidget(text="Ok", callback_data="return_to_context")
-
-    async def init(self):
-        self.add_button_in_new_row(self._back)
+        self.add_button_in_new_row(Buttons.back(back_text))

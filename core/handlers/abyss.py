@@ -10,26 +10,14 @@ from core.tools.emoji import Emoji
 abyss_router = Router()
 
 
-@abyss_router.callback_query(F.data == "return_to_context")
-async def return_to_context(callback: CallbackQuery, bot_control: BotControl):
-    await bot_control.return_to_context()
-
-
-@abyss_router.callback_query(F.data == "reset_context")
-async def reset_context(message: Message, bot_control: BotControl):
-    await bot_control.reset_context()
-
-
-@abyss_router.callback_query(F.data == "exit")
-async def exit_(message: Message, bot_control: BotControl):
-    await bot_control.exit()
+@abyss_router.callback_query(F.data == "bury")
+async def bury(message: Message, bot_control: BotControl):
+    await bot_control.bury()
 
 
 @abyss_router.callback_query()
 async def callback_abyss(callback: CallbackQuery, bot_control: BotControl):
-    await bot_control.update_text_message(
-        Info, f"Sorry. This button no working so far. {Emoji.CRYING_CAT}"
-    )
+    await bot_control.dig(Info(f"Sorry. This button no working so far. {Emoji.CRYING_CAT}"))
 
 
 @abyss_router.message(~StateFilter(None))
@@ -45,15 +33,15 @@ async def wrong_type_message_abyss(
     elif "photo" in state_name:
         guess = "photo"
 
-    if guess is not None:
+    if guess:
         guess = f"Try to send {guess}"
-    await bot_control.update_text_message(
-        Input, f"Wrong message type {Emoji.BROKEN_HEARTH} {guess}", state=state_name)
+    await bot_control.dream(Input(
+        f"Wrong message type {Emoji.BROKEN_HEARTH} {guess}",
+        state=state_name)
+    )
 
 
 @abyss_router.message()
 async def message_abyss(message: Message, bot_control: BotControl):
     await message.delete()
-    await bot_control.create_text_message(
-        Info, f"Your message was eaten by the abyss {Emoji.ABYSS}"
-    )
+    await bot_control.dig(Info(f"Your message was eaten by the abyss {Emoji.ABYSS}"))

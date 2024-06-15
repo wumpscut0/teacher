@@ -1,23 +1,24 @@
-from aiogram.filters.callback_data import CallbackData
 from aiogram.types import FSInputFile
 
-from core.markups import PhotoMessageConstructor, TextWidget, ButtonWidget
+from core.markups import PhotoTextMessageConstructor, TextWidget, Buttons
 from core.tools import Emoji
 
 
-class Photo(PhotoMessageConstructor):
+class Photo(PhotoTextMessageConstructor):
     def __init__(
             self,
             photo: str | FSInputFile,
             caption: str | None = None,
-            back_callback_data: str | CallbackData = "return_to_context"
+            back_text: str = Emoji.BACK
     ):
         super().__init__()
         self.photo = photo
-        self._caption = caption
-        self._back = ButtonWidget(text=f"{Emoji.DENIAL} Закрыть", callback_data=back_callback_data)
+        if caption:
+            self.add_texts_rows(TextWidget(text=caption))
+        self.add_button_in_new_row(Buttons.back(back_text))
 
-    async def init(self):
-        if self._caption:
-            self.add_texts_rows(TextWidget(text=self._caption))
-        self.add_button_in_new_row(self._back)
+
+class MessageFactory:
+    @staticmethod
+    def photo(photo: str | FSInputFile, caption: str | None = None):
+        return PhotoTextMessageConstructor(photo, caption)
