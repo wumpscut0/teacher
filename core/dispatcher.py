@@ -37,7 +37,7 @@ class BuildBot:
             cache
         ))
         self.dispatcher.include_routers(default_commands_router, *routers, abyss_router)
-        SCHEDULER.scheduler.start()
+        SCHEDULER.start()
 
     async def start_polling(self, custom_commands: List[BotCommand]):
         commands = BotCommands.commands()

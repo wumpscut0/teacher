@@ -1,14 +1,13 @@
 import os
+from collections import defaultdict
+from typing import List
 
-from aiogram.filters.callback_data import CallbackData
-from aiogram.fsm.state import State
 from aiogram.types import FSInputFile
 
 from FSM import States
 from cache import Cache
 from core import ButtonWidget, PhotoTextMessageConstructor, TextMessageConstructor, Emoji
-from core.markups import DataTextWidget, TextWidget
-from core.markups.photo_messages import Photo
+from core.markups import DataTextWidget, TextWidget, Buttons
 
 
 class Greetings(PhotoTextMessageConstructor):
@@ -32,47 +31,45 @@ class PrivateTuurngaidTitleScreen(PhotoTextMessageConstructor):
         ]
         self.keyboard_map = keyboard_map
 
-# TODO rethink initializers
-
 
 class Translate(TextMessageConstructor):
-    def __init__(self, cache: Cache, *, answer: str | None = None, new_word: str | None = None):
-        self._new_word = new_word
-        if new_word is None:
-            super().__init__()
-        else:
-            super().__init__(States.input_text_word_translate)
-        self._answer = answer
-        self._cache = cache
+    def __init__(self, user_id: str | int, answer: str | None = None):
+        super().__init__()
+        self._cache = Cache(user_id)
 
-    async def init(self):
+        self._answer = answer
+
         if self._answer is not None:
             answer = self._answer.split(", ")
-            word = self._cache.current_word
             for i_answer in answer:
-                if i_answer not in word[1].split(", "):
-                    flip_card = f"Wrong answer {Emoji.DENIAL}. Correct answer is {word[1]}\n\n"
+                if i_answer not in self._cache.word[1].split(", "):
+                    wrong_answer = DataTextWidget(text=f"{Emoji.DENIAL} Wrong answer", data=self._answer)
+                    flip_card = DataTextWidget(text="Correct answer", data=f"{self._cache.word[1]}\n\n")
+                    self.add_texts_rows(wrong_answer, flip_card)
                     break
             else:
-                flip_card = f"Correct {Emoji.OK}\n\n"
+                self.add_texts_rows(TextWidget(text=f"Correct {Emoji.OK}\n\n"))
                 self._cache.score += 1
-                if self._cache.score == 5:
-                    await self._bot_control._create_photo_message(Photo, FSInputFile(
-                        os.path.join(os.path.dirname(__file__), "../images/5.jpg")))
-                elif self._cache.score == 10:
-                    await self._bot_control._create_photo_message(Photo, FSInputFile(
-                        os.path.join(os.path.dirname(__file__), "../images/10.jpg")))
-        else:
-            flip_card = ""
+
+        self._new_word = self._cache.pop_word
+        if self._new_word is not None:
+            self.state = States.input_text_word_translate
 
         if self._new_word is None:
-            back_text = "Ok"
-            text = f"{flip_card}Your result"
-            data = f"{self._cache.score}/{self._cache.possible_scores}"
+            continue_ = DataTextWidget(text=f"Your result", data=f"{self._cache.score}/{self._cache.possible_scores}")
+            back = Buttons.back("Ok")
         else:
-            back_text = f"Cancel {Emoji.DENIAL}"
-            text = f"{flip_card}Translate"
-            data = f"{self._new_word[0]}"
+            continue_ = DataTextWidget(text=f"Translate", data=f"{self._new_word[0]}")
+            back = Buttons.back(f"Cancel run{Emoji.DENIAL}")
 
-        self.add_texts_rows(DataTextWidget(text=text, data=data))
-        self.add_button_in_new_row(ButtonWidget(text=back_text, callback_data="reset_context"))
+        self.add_texts_rows(continue_)
+        self.add_buttons_in_new_row(back)
+
+
+class Reward(PhotoTextMessageConstructor):
+    # TODO think about
+    def __init__(self, photo: str | FSInputFile, text_map: List[TextWidget | DataTextWidget], keyboard_map: List[List[ButtonWidget]]):
+        super().__init__(state=States.input_text_word_translate)
+        self.photo = photo
+        self.text_map = text_map
+        self.keyboard_map = keyboard_map

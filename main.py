@@ -19,9 +19,9 @@ async def main():
         english_router,
         party_router,
         token=os.getenv("TOKEN"),
-        private_title_screen=PrivateTuurngaidTitleScreen,
-        group_title_screen=GroupPartyTitleScreen,
-        hello_screen=Greetings,
+        private_title_screen=PrivateTuurngaidTitleScreen(),
+        group_title_screen=GroupPartyTitleScreen(),
+        hello_screen=Greetings(),
         cache=Cache
     ).start_polling(BotCommands.commands())
 

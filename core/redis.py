@@ -1,13 +1,11 @@
 import os
 import pickle
-from typing import Union, Any, List
+from typing import Union, Any
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
-
-from core import TextMessageConstructor
 
 load_dotenv(find_dotenv())
 
@@ -73,13 +71,13 @@ class Storage:
     def __init__(self, id_: str = ""):
         self._id_ = id_
 
-    def __get(self, key: str, default: Any | None = None):
+    def _get(self, key: str, default: Any | None = None):
         value = self.STORAGE.get(f"{key}:{self._id_}")
         if value is None:
             return default
         return value
 
-    def __set(self, key: str, value: Any):
+    def _set(self, key: str, value: Any):
         self.STORAGE.set(f"{key}:{self._id_}", value)
 
 
@@ -88,28 +86,28 @@ class TitleScreens(Storage):
         super().__init__(bot_id)
 
     @property
-    def private_title_screen(self) -> TextMessageConstructor:
-        return self.__get(f"private_title_screen")
+    def private_title_screen(self):
+        return self._get(f"private_title_screen")
 
     @private_title_screen.setter
-    def private_title_screen(self, private_title_screen: TextMessageConstructor):
-        self.__set("private_title_screen", private_title_screen)
+    def private_title_screen(self, private_title_screen):
+        self._set("private_title_screen", private_title_screen)
 
     @property
-    def group_title_screen(self) -> TextMessageConstructor:
-        return self.__get(f"group_title_screen")
+    def group_title_screen(self):
+        return self._get(f"group_title_screen")
 
     @group_title_screen.setter
-    def group_title_screen(self, group_title_screen: TextMessageConstructor):
-        self.__set("group_title_screen", group_title_screen)
+    def group_title_screen(self, group_title_screen):
+        self._set("group_title_screen", group_title_screen)
 
     @property
-    def greetings(self) -> TextMessageConstructor:
-        return self.__get(f"greetings")
+    def greetings(self):
+        return self._get(f"greetings")
 
     @greetings.setter
-    def greetings(self, greetings: TextMessageConstructor):
-        self.__set("greetings", greetings)
+    def greetings(self, greetings):
+        self._set("greetings", greetings)
 
 
 class UserStorage(Storage):
@@ -118,24 +116,24 @@ class UserStorage(Storage):
 
     @property
     def name(self):
-        return self.__get("name", "Unknown")
+        return self._get("name", "Unknown")
 
     @name.setter
     def name(self, data: Any):
-        self.__set("name", data)
+        self._set("name", data)
 
 
 class ContextStorage(Storage):
     def __init__(self, chat_id: str | int, bot_id: str | int):
-        super().__init__(chat_id + bot_id)
+        super().__init__(f"{chat_id}{bot_id}")
 
     @property
-    def _context_stack(self) -> List[TextMessageConstructor]:
-        return self.__get(f"context_stack", [])
+    def _context_stack(self):
+        return self._get(f"context_stack", [])
 
     @_context_stack.setter
     def _context_stack(self, context_stack):
-        self.__set("context_stack", context_stack)
+        self._set("context_stack", context_stack)
 
     @property
     def look_around(self):
@@ -147,35 +145,36 @@ class ContextStorage(Storage):
     def dream(self, markup):
         stack = self._context_stack
         if not stack:
-            return
-        stack[-1] = markup
+            stack.append(markup)
+        else:
+            stack[-1] = markup
         self._context_stack = stack
         return markup
 
-    def dig(self, *markups: TextMessageConstructor):
+    def dig(self, *markups):
         stack = self._context_stack
         stack.extend(markups)
         self._context_stack = stack
         return self.look_around
 
-    def bury(self) -> TextMessageConstructor | None:
+    def bury(self):
         stack = self._context_stack
         if not stack:
             return
-        markup = stack.pop()
+        stack.pop()
         self._context_stack = stack
-        return markup
+        return self.look_around
 
-    def come_out(self, markup: TextMessageConstructor):
+    def come_out(self, markup):
         self._context_stack = [markup]
 
     @property
     def chat_messages_ids_pull(self) -> [int]:
-        return self.__get("chat_messages_ids_pull", [])
+        return self._get("chat_messages_ids_pull", [])
 
     @chat_messages_ids_pull.setter
     def chat_messages_ids_pull(self, data: Any):
-        self.__set("chat_messages_ids_pull", data)
+        self._set("chat_messages_ids_pull", data)
 
     @property
     def last_message_id(self) -> int | None:

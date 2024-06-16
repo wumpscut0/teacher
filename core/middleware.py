@@ -4,7 +4,7 @@ from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from core import BotControl, Info, TextMessageConstructor, ImpossibleRestoreContext, ImpossibleCreateMessage
+from core import BotControl, Info, TextMessageConstructor
 from core.redis import UserStorage, TitleScreens
 from core.tools.emoji import Emoji
 from core.tools.loggers import errors
@@ -36,9 +36,9 @@ class BuildBotControl(BaseMiddleware):
         data["bot_control"] = bot_control
         try:
             return await handler(event, data)
-        except (ImpossibleRestoreContext, ImpossibleCreateMessage, BaseException) as e:
+        except (ValueError, BaseException) as e:
             errors.critical(f"An error occurred when execution some handler", exc_info=True)
-            await bot_control.dig(
+            await bot_control.dream(
                 Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"),
             )
             raise e

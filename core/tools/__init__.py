@@ -35,7 +35,7 @@ def create_progress_text(
     return progress
 
 
-def split(size: int, items: Iterable[T]) -> List[List[T]]:
+def split(size: int, items: Iterable[T], page: int | None = None):
     lines = []
     line = []
     for item in items:
@@ -44,6 +44,8 @@ def split(size: int, items: Iterable[T]) -> List[List[T]]:
             line = []
         line.append(item)
     lines.append(line)
+    if page is not None:
+        return lines[page % len(lines)]
     return lines
 
 

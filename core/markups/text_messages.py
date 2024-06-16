@@ -13,7 +13,7 @@ class Info(TextMessageConstructor):
     ):
         super().__init__()
         self.add_texts_rows(TextWidget(text=text))
-        self.add_button_in_last_row(Buttons.back(back_text))
+        self.add_buttons_in_last_row(Buttons.back(back_text))
 
 
 class Temp(TextMessageConstructor):
@@ -35,7 +35,7 @@ class Input(TextMessageConstructor):
     ):
         super().__init__(state)
         self.add_texts_rows(TextWidget(text=text))
-        self.add_button_in_new_row(Buttons.back(text=back_text))
+        self.add_buttons_in_new_row(Buttons.back(text=back_text))
 
 
 class Conform(TextMessageConstructor):

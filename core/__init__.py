@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 
 from aiogram import Bot, Router
-from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InputMediaPhoto, InputMediaAudio, Message, CallbackQuery, BotCommand
@@ -17,16 +17,6 @@ from core.markups import TextMessageConstructor, PhotoTextMessageConstructor, Vo
 
 from core.tools.emoji import Emoji
 from core.tools.loggers import errors, info
-
-
-class ImpossibleRestoreContext(BaseException):
-    def __str__(self):
-        return "Impossible restore context"
-
-
-class ImpossibleCreateMessage(BaseException):
-    def __str__(self):
-        return "Impossible create message"
 
 
 class BotCommands:
@@ -94,7 +84,7 @@ class BotControl:
             bot: Bot,
             chat_id: str,
             state: FSMContext,
-            user_storage: UserStorage,
+            user_storage,
             title_screens: TitleScreens
     ):
         self.chat_id = chat_id
@@ -105,23 +95,38 @@ class BotControl:
         self._bot = bot
 
     async def _actualize_markup(self, raw_markup: TextMessageConstructor):
-        await raw_markup.init()
+        try:
+            await raw_markup.init()
+        except AttributeError:
+            await self._come_out()
+            raise ValueError("Error with trying init raw markup")
         await self._state.set_state(raw_markup.state)
 
     async def dig(self, *markups_: TextMessageConstructor):
         await self._look_around(self._context_storage.dig(*markups_))
 
-    async def dig_the_other_way(self, markup: TextMessageConstructor):
+    async def redirect_dig(self, markup: TextMessageConstructor):
         await self._look_around(self._context_storage.dig(markup), dig_straight=False)
 
+    async def get_current_point(self):
+        return self._context_storage.look_around
+
     async def dream(self, markup):
-        await self._look_around(await self._context_storage.dream(markup))
+        await self._look_around(self._context_storage.dream(markup))
 
     async def bury(self):
-        await self._look_around(self._context_storage.bury())
+        markup = self._context_storage.bury()
+        if markup is None:
+            await self._come_out()
+        else:
+            await self._look_around(markup)
 
     async def look_around(self):
-        await self._look_around(self._context_storage.look_around)
+        markup = self._context_storage.look_around
+        if markup is None:
+            await self._come_out()
+        else:
+            await self._look_around(markup)
 
     async def sleep(self):
         for message_id in self._context_storage.chat_messages_ids_pull:
@@ -138,7 +143,7 @@ class BotControl:
             self._context_storage.add_message_id(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
-            raise ImpossibleCreateMessage
+            raise ValueError("Impossible create message")
 
     async def _update_text_message(self, markup: TextMessageConstructor):
         last_message_id = self._context_storage.last_message_id
@@ -153,9 +158,12 @@ class BotControl:
                 text=markup.text,
                 reply_markup=markup.keyboard,
             )
-        except TelegramBadRequest:
+        except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
-            await self._update_text_message(markup)
+            if "message is not modified" in e.message:
+                await self._update_text_message(self._context_storage.bury())
+            else:
+                await self._update_text_message(markup)
 
     async def _create_photo_message(self, markup: PhotoTextMessageConstructor):
         try:
@@ -169,7 +177,7 @@ class BotControl:
             self._context_storage.add_message_id(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
-            raise ImpossibleCreateMessage
+            raise ValueError("Impossible create message")
 
     async def _update_photo_message(self, markup: PhotoTextMessageConstructor):
         last_message_id = self._context_storage.last_message_id
@@ -189,9 +197,12 @@ class BotControl:
                 caption=markup.text,
                 reply_markup=markup.keyboard
             )
-        except TelegramBadRequest:
+        except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
-            await self._update_photo_message(markup)
+            if "message is not modified" in e.message:
+                await self._update_photo_message(self._context_storage.bury())
+            else:
+                await self._update_photo_message(markup)
 
     async def _create_voice_message(self, markup: VoiceTextMessageConstructor):
         try:
@@ -205,7 +216,7 @@ class BotControl:
             self._context_storage.add_message_id(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
-            raise ImpossibleCreateMessage
+            raise ValueError("Impossible create message")
 
     async def _update_voice_message(self, markup: VoiceTextMessageConstructor):
         last_message_id = self._context_storage.last_message_id
@@ -220,21 +231,19 @@ class BotControl:
                 media=InputMediaAudio(media=markup.voice),
                 reply_markup=markup.keyboard,
             )
-        except (TelegramBadRequest, TelegramNetworkError):
+        except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
-            await self._update_voice_message(markup)
+            if "not modified" in e.message:
+                await self._update_voice_message(self._context_storage.bury())
+            else:
+                await self._update_voice_message(markup)
 
     async def _look_around(self, markup: TextMessageConstructor, dig_straight=True, _after_reset=False):
         if not _after_reset:
             await self._contextualize_chat()
             await self._actualize_markup(markup)
         try:
-            if isinstance(markup, TextMessageConstructor):
-                if dig_straight:
-                    await self._update_text_message(markup)
-                else:
-                    await self._create_text_message(markup)
-            elif isinstance(markup, PhotoTextMessageConstructor):
+            if isinstance(markup, PhotoTextMessageConstructor):
                 if dig_straight:
                     await self._update_photo_message(markup)
                 else:
@@ -244,6 +253,11 @@ class BotControl:
                     await self._update_voice_message(markup)
                 else:
                     await self._create_voice_message(markup)
+            elif isinstance(markup, TextMessageConstructor):
+                if dig_straight:
+                    await self._update_text_message(markup)
+                else:
+                    await self._create_text_message(markup)
             else:
                 errors.critical(
                     f"Incorrect markup instance.\n"
@@ -253,7 +267,7 @@ class BotControl:
         except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
             if _after_reset:
                 errors.critical("Impossible restore context", exc_info=True)
-                raise ImpossibleRestoreContext
+                raise ValueError("Impossible restore context")
             info.warning(f"broken contex", exc_info=True)
             await self._come_out()
 
@@ -262,7 +276,9 @@ class BotControl:
             markup = self.title_screens.group_title_screen
         else:
             markup = self.title_screens.private_title_screen
+        self._context_storage.bury()
         await self._actualize_markup(markup)
+        # await self.dream(markup)
         await self._look_around(markup, _after_reset=True)
 
     async def _contextualize_chat(self):

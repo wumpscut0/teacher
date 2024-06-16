@@ -3,10 +3,8 @@ from typing import List
 from sqlalchemy import insert, select, delete
 from sqlalchemy.exc import IntegrityError
 
-from cache import EnglishRunStorage
 from database import Session, engine
 from database.models import User, Word, WordModel, Base
-from core.tools import Emoji
 
 
 async def create_all():
@@ -33,20 +31,18 @@ async def select_words() -> List[WordModel]:
         return [word.as_model() for word in (await session.execute(select(Word))).scalars()]
 
 
-async def insert_new_words(rewrite=False):
-    storage = EnglishRunStorage()
-    if rewrite:
-        async with Session.begin() as session:
-            await session.execute(delete(Word))
-        session.commit()
-    for button in storage.edit:
+async def insert_new_words(*words: WordModel):
+    for word in words:
         try:
             async with Session.begin() as session:
-                if button.mark == Emoji.OK:
-                    eng, translate = button.text.split(":")
-                await session.execute(insert(Word).values(eng=eng.lstrip(f"{Emoji.OK} "), translate=translate.split(", ")))
+                await session.execute(insert(Word).values(eng=word.eng, translate=word.translate))
         except IntegrityError:
             pass
-
     await session.commit()
-    storage.edit = None
+
+
+async def delete_words(*words: str):
+    async with Session.begin() as session:
+        for word in words:
+            await session.execute(delete(Word).where(Word.eng == word))
+    await session.commit()

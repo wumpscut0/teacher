@@ -1,5 +1,5 @@
 import os.path
-from typing import List, Self, Type
+from typing import List
 
 from aiogram.types import FSInputFile
 from aiogram.utils.formatting import as_list, Text, Bold, Italic
@@ -135,27 +135,16 @@ class KeyboardMarkupConstructor:
     def keyboard_map(self, map_: List[List[ButtonWidget]]):
         self._keyboard_map = map_
 
-    def merge(self, keyboard: Type[Self]):
-        for row in keyboard.keyboard_map:
-            self.add_buttons_in_new_row(*row)
-
-    def add_button_in_last_row(self, buttons: ButtonWidget, only_emoji_text=False):
+    def add_buttons_in_last_row(self, *buttons: ButtonWidget, only_emoji_text=False):
         if only_emoji_text:
             limitations_row = self._limitation_row_with_emoji
         else:
             limitations_row = self._limitation_row
-
-        if len(self._keyboard_map[-1]) == limitations_row:
-            self.add_button_in_new_row(buttons)
-        else:
-            self._keyboard_map[-1].append(buttons)
-
-    def add_buttons_in_last_row(self, *buttons: ButtonWidget, only_emoji_text=False):
         for button in buttons:
-            self.add_button_in_last_row(button, only_emoji_text)
-
-    def add_button_in_new_row(self, button: ButtonWidget):
-        self._keyboard_map.append([button])
+            if len(self._keyboard_map[-1]) == limitations_row:
+                self.add_buttons_in_new_row(button)
+            else:
+                self._keyboard_map[-1].append(button)
 
     def add_buttons_in_new_row(self, *buttons: ButtonWidget, only_emoji_text=False):
         if only_emoji_text:
@@ -167,14 +156,14 @@ class KeyboardMarkupConstructor:
         for button in buttons:
             if limit == limitations_row:
                 limit = 0
-                self.add_button_in_new_row(button)
+                self.add_buttons_in_new_row(button)
             else:
-                self.add_button_in_last_row(button, only_emoji_text)
+                self.add_buttons_in_last_row(button, only_emoji_text=only_emoji_text)
             limit += 1
 
     def add_buttons_as_column(self, *buttons: ButtonWidget):
         for button in buttons:
-            self.add_button_in_new_row(button)
+            self.add_buttons_in_new_row(button)
 
     @property
     def keyboard(self):
@@ -200,7 +189,7 @@ class TextMessageConstructor(
         KeyboardMarkupConstructor.__init__(self)
         TextMarkupConstructor.__init__(self)
 
-    def init(self):
+    async def init(self):
         ...
 
 
@@ -264,7 +253,7 @@ class Buttons:
         )
 
     @staticmethod
-    def right(callback_data: str | CallbackData, text: str = Emoji.LEFT, mark: str = ""):
+    def right(callback_data: str | CallbackData, text: str = Emoji.RIGHT, mark: str = ""):
         return ButtonWidget(
             text=text, mark=mark, sep="", callback_data=callback_data, mark_left=False
         )
