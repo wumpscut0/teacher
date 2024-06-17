@@ -1,11 +1,13 @@
 import os
 import pickle
-from typing import Union, Any
+from typing import Union, Any, List
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
+
+from core.tools.loggers import errors
 
 load_dotenv(find_dotenv())
 
@@ -72,7 +74,12 @@ class Storage:
         self._id_ = id_
 
     def _get(self, key: str, default: Any | None = None):
-        value = self.STORAGE.get(f"{key}:{self._id_}")
+        try:
+            value = self.STORAGE.get(f"{key}:{self._id_}")
+        except (AttributeError, ModuleNotFoundError, Exception):
+            errors.error("Impossible restore deserialized data")
+            self._set(key, default)
+            return default
         if value is None:
             return default
         return value
@@ -109,18 +116,18 @@ class TitleScreens(Storage):
     def greetings(self, greetings):
         self._set("greetings", greetings)
 
-
-class UserStorage(Storage):
-    def __init__(self, user_id: str | int):
-        super().__init__(user_id)
-
     @property
-    def name(self):
-        return self._get("name", "Unknown")
+    def users_ids(self):
+        return self._get(f"users_ids", [])
 
-    @name.setter
-    def name(self, data: Any):
-        self._set("name", data)
+    def add_user_id(self, user_id: Any):
+        user_ids = self.users_ids
+        user_ids.append(user_id)
+        self.users_ids = user_ids
+
+    @users_ids.setter
+    def users_ids(self, users_ids: List[Any]):
+        self._set("users_ids", users_ids)
 
 
 class ContextStorage(Storage):
@@ -128,11 +135,11 @@ class ContextStorage(Storage):
         super().__init__(f"{chat_id}{bot_id}")
 
     @property
-    def _context_stack(self):
+    def _context_stack(self) -> List:
         return self._get(f"context_stack", [])
 
     @_context_stack.setter
-    def _context_stack(self, context_stack):
+    def _context_stack(self, context_stack: List):
         self._set("context_stack", context_stack)
 
     @property

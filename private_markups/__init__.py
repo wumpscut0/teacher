@@ -3,73 +3,80 @@ from collections import defaultdict
 from typing import List
 
 from aiogram.types import FSInputFile
+from pydantic import BaseModel
 
 from FSM import States
-from cache import Cache
-from core import ButtonWidget, PhotoTextMessageConstructor, TextMessageConstructor, Emoji
-from core.markups import DataTextWidget, TextWidget, Buttons
+from core import ButtonWidget, WindowBuilder, Emoji
+from core.markups import DataTextWidget, TextWidget
 
 
-class Greetings(PhotoTextMessageConstructor):
+class Greetings(WindowBuilder):
     def __init__(self):
-        super().__init__()
-        self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/Tuurngide.jpg"))
-        self.add_texts_rows(TextWidget(text=f"Wellcome.\nI am Tuurngaid.\nI will pass on all my knowledge to you, step by step."))
-        self.add_buttons_in_new_row(ButtonWidget(text="Ok", callback_data="reset_context"))
+        super().__init__(type_="photo", back_text="Ok")
+        self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/Tuurngaid.jpg"))
+
+    async def init(self):
+        self.add_texts_rows(TextWidget(
+            text=f"Wellcome, human.\nI am Tuurngaid.\nI will pass on all my knowledge to you, step by step."
+        ))
 
 
-class PrivateTuurngaidTitleScreen(PhotoTextMessageConstructor):
+class PrivateTuurngaidTitleScreen(WindowBuilder):
     def __init__(self):
-        super().__init__()
+        super().__init__(type_="photo", burying=False)
         self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/lV7-nxj4P_o.jpg"))
 
     async def init(self):
-        keyboard_map = [
+        self.keyboard_map = [
             [
                 ButtonWidget(text="Run English", callback_data="run_english")
             ]
         ]
-        self.keyboard_map = keyboard_map
 
 
-class Translate(TextMessageConstructor):
-    def __init__(self, user_id: str | int, answer: str | None = None):
-        super().__init__()
-        self._cache = Cache(user_id)
+class Card(BaseModel):
+    question: str
+    answer: str
 
-        self._answer = answer
 
-        if self._answer is not None:
-            answer = self._answer.split(", ")
-            for i_answer in answer:
-                if i_answer not in self._cache.word[1].split(", "):
-                    wrong_answer = DataTextWidget(text=f"{Emoji.DENIAL} Wrong answer", data=self._answer)
-                    flip_card = DataTextWidget(text="Correct answer", data=f"{self._cache.word[1]}\n\n")
-                    self.add_texts_rows(wrong_answer, flip_card)
+class English(WindowBuilder):
+    def __init__(self, cards: List[Card]):
+        super().__init__(state=States.input_text_word_translate, freeze=True)
+        self.cards = cards
+        self.current_card = self.cards.pop()
+        self._rewards = defaultdict(int)
+        self._possible_scores = len(self.cards)
+        self.answer = None
+        self._score = 0
+
+    async def init(self):
+        if self.answer is not None:
+            for i_answer in self.answer.split(", "):
+                if i_answer in self.current_card.answer.split(", "):
+                    self.add_texts_rows(TextWidget(text=f"Correct {Emoji.OK}\n\n"))
+                    self._score += 1
                     break
             else:
-                self.add_texts_rows(TextWidget(text=f"Correct {Emoji.OK}\n\n"))
-                self._cache.score += 1
-
-        self._new_word = self._cache.pop_word
-        if self._new_word is not None:
-            self.state = States.input_text_word_translate
-
-        if self._new_word is None:
-            continue_ = DataTextWidget(text=f"Your result", data=f"{self._cache.score}/{self._cache.possible_scores}")
-            back = Buttons.back("Ok")
+                self.add_texts_rows(
+                    DataTextWidget(text=f"{Emoji.DENIAL} Wrong answer", data=self.answer),
+                    DataTextWidget(text="Correct answer", data=f"{self.current_card.answer}\n\n")
+                )
+        try:
+            self.current_card = self.cards.pop()
+        except IndexError:
+            self.state = None
+            self.add_texts_rows(DataTextWidget(text=f"Your result", data=f"{self._score}/{self._possible_scores}"))
+            self.back.text = f"Ok"
         else:
-            continue_ = DataTextWidget(text=f"Translate", data=f"{self._new_word[0]}")
-            back = Buttons.back(f"Cancel run{Emoji.DENIAL}")
+            self.add_texts_rows(DataTextWidget(text=f"Translate", data=f"{self.current_card.question}"))
+            self.back.text = f"Cancel run {Emoji.DENIAL}"
 
-        self.add_texts_rows(continue_)
-        self.add_buttons_in_new_row(back)
-
-
-class Reward(PhotoTextMessageConstructor):
-    # TODO think about
-    def __init__(self, photo: str | FSInputFile, text_map: List[TextWidget | DataTextWidget], keyboard_map: List[List[ButtonWidget]]):
-        super().__init__(state=States.input_text_word_translate)
-        self.photo = photo
-        self.text_map = text_map
-        self.keyboard_map = keyboard_map
+        for threshold in range(5, self._possible_scores, 5):
+            if threshold == self._score:
+                if not self._rewards[threshold]:
+                    self._rewards[threshold] = 1
+                    self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), f"../images/{threshold}.jpg"))
+                    self.type = "photo"
+                break
+        else:
+            self.type = "text"

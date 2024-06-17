@@ -1,17 +1,16 @@
-import os
 import random
+from copy import copy
 
 from aiogram import F
-from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message
 
-from cache import Cache
 from FSM import States
-from core.markups.photo_messages import Photo
-from core.markups.text_messages import Input
+from core.markups import Input, Info
+
 from database.queries import select_words
-from core import BotControl, Info, Routers
+from core import BotControl, Routers
 from core.tools import Emoji
-from private_markups import Translate, Reward
+from private_markups import English, Card
 
 english_router = Routers.private()
 
@@ -38,8 +37,8 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
     if not 1 <= value <= len(words):
         return
 
-    words = [[word.eng, ', '.join(word.translate)] for word in words]
-    words.extend([[translate, eng] for eng, translate in words])
+    cards = [Card(question=word.eng, answer=', '.join(word.translate)) for word in words]
+    cards.extend([Card(question=card.answer, answer=card.question) for card in cards])
 
     if not words:
         await bot_control.dream(Info(
@@ -48,34 +47,26 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
         ))
         return
 
-    bot_control.user_storage.possible_scores = value * 2
-    bot_control.user_storage.score = 0
-    random.shuffle(words)
-    bot_control.user_storage.words = words[:value * 2]
+    random.shuffle(cards)
     await bot_control.dream(
-        Translate(bot_control.chat_id)
+        English(cards[:value * 2])
     )
 
-
+# TODO finalize
 @english_router.message(States.input_text_word_translate)
 async def accept_input_text_word_translate(message: Message, bot_control: BotControl):
     answer = message.text
     await message.delete()
-
-    cache: Cache = bot_control.user_storage
-    score = cache.score
-    for threshold in range(5, cache.possible_scores, 5):
-        if threshold == score:
-            rewards = cache.rewards
-            if not rewards[threshold]:
-                rewards[threshold] = 1
-            cache.rewards = rewards
-            point = await bot_control.get_current_point()
-            await bot_control.dream(Reward(
-                FSInputFile(os.path.join(os.path.dirname(__file__), f"../images/{threshold}.jpg")),
-                point.text_map,
-                point.keyboard_map
-            ))
-            break
-    else:
-        await bot_control.dream(Translate(bot_control.chat_id, answer))
+    english: English = await bot_control.get_current_point()
+    english.answer = answer
+    await english.init()
+    english.init_control()
+    fresh_markup = copy(english)
+            fresh_markup.text_map = []
+            fresh_markup.keyboard_map = [[]]
+            self._context_storage.dream(fresh_markup)
+        await self._state.set_state(raw_markup.state)
+    except AttributeError:
+        await self._come_out()
+        raise ValueError("Error with trying init raw markup")
+    await bot_control.dream(english)

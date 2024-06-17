@@ -1,5 +1,5 @@
 import os.path
-from typing import List
+from typing import List, Literal, Any, Iterable, TypeVar
 
 from aiogram.types import FSInputFile
 from aiogram.utils.formatting import as_list, Text, Bold, Italic
@@ -76,6 +76,10 @@ class ButtonWidget:
         self.callback_data = callback_data
 
     @property
+    def only_text(self):
+        return self.text.lstrip(self.mark + self.sep)
+
+    @property
     def text(self):
         if self.mark_left:
             return self.mark + self.sep + self._text
@@ -105,9 +109,10 @@ class TextMarkupConstructor:
 
     @property
     def text(self):
-        if not self._text_map:
-            return Emoji.BAN
-        return (as_list(*[text.text for text in self._text_map])).as_html()
+        try:
+            return (as_list(*(text.text for text in self._text_map))).as_html()
+        except IndexError:
+            return ""
 
 
 class KeyboardMarkupConstructor:
@@ -179,49 +184,83 @@ class KeyboardMarkupConstructor:
         return markup.as_markup()
 
 
-class TextMessageConstructor(
-    TextMarkupConstructor,
-    KeyboardMarkupConstructor,
+T = TypeVar("T")
 
+
+class WindowBuilder(
+    TextMarkupConstructor,
+    KeyboardMarkupConstructor
 ):
-    def __init__(self, state: State | None = None):
+    _max_buttons = 100
+    _max_symbols = 1024
+    _available_types = "text", "photo", "audio"
+
+    def __init__(
+            self,
+            *,
+            type_: Literal["text", "photo", "audio"] = "text",
+            state: str | State | None = None,
+            photo: str | FSInputFile | None = None,
+            voice: str | FSInputFile | None = None,
+            text_map: list[DataTextWidget | TextWidget] | None = None,
+            keyboard_map: list[list[ButtonWidget]] | None = None,
+            burying: bool = True,
+            back_text: str = Emoji.BACK,
+            left_text: str = Emoji.LEFT,
+            left_mark: str = "",
+            right_text: str = Emoji.RIGHT,
+            right_mark: str = "",
+            size_page: int = 10,
+            page: int = 0,
+            data: list[Any] = None,
+            freeze: bool = False
+    ):
+        TextMarkupConstructor.__init__(self, text_map)
+        KeyboardMarkupConstructor.__init__(self, keyboard_map)
+        self.freeze = freeze
+        self._data = [] if data is None else data
+        self._size_page = size_page
+        if size_page > self._max_buttons:
+            raise ValueError(f"Max size page is {self._max_buttons}")
+        self._partitioned_data = self.split(size_page, self._data)
+        self.burying = burying
+        self.page = page
+        self.type = type_
         self.state = state
-        KeyboardMarkupConstructor.__init__(self)
-        TextMarkupConstructor.__init__(self)
+        self._photo = photo
+        self._voice = voice
+        self.left = ButtonWidget(text=left_text, mark=left_mark, sep="", callback_data="flip_left")
+        self.right = ButtonWidget(text=right_text, mark=right_mark, sep="", callback_data="flip_right")
+        self.back = ButtonWidget(text=back_text, callback_data="bury")
+        if len(self.text) > self._max_symbols:
+            raise ValueError(f"Max symbols per message is {self._max_symbols}")
+        if self.type not in self._available_types:
+            raise ValueError(f"Available type is {self._available_types} not {self.type}")
+
+    @property
+    def data(self) -> List[Any]:
+        return [item for page in self._partitioned_data for item in page]
+
+    @data.setter
+    def data(self, data: List[Any]):
+        self._data = data
+
+    @property
+    def partitioned_data(self) -> List[Any]:
+        return self._partitioned_data[self.page % len(self._partitioned_data)]
+
+    @partitioned_data.setter
+    def partitioned_data(self, partitioned_data: List[Any]):
+        self._partitioned_data[self.page % len(self._partitioned_data)] = partitioned_data
 
     async def init(self):
         ...
 
-
-class PhotoTextMessageConstructor(TextMessageConstructor):
-    def __init__(self, photo: str | FSInputFile | None = None, state: State | None = None):
-        self.state = state
-        self._photo = photo
-        super().__init__()
-
-    @property
-    def photo(self):
-        if not self._photo:
-            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_photo.jpg"))
-        return self._photo
-
-    @photo.setter
-    def photo(self, photo: str | FSInputFile):
-        self._photo = photo
-
-    @property
-    def text(self):
-        text = super().text
-        if text == Emoji.BAN:
-            return None
-        return text
-
-
-class VoiceTextMessageConstructor(TextMessageConstructor):
-    def __init__(self, voice: str | FSInputFile | None = None, state: State | None = None):
-        self.state = state
-        self._voice = voice
-        super().__init__()
+    def init_control(self):
+        if len(self._partitioned_data) > 1:
+            self.add_buttons_in_new_row(self.left, self.right)
+        if self.burying:
+            self.add_buttons_in_new_row(self.back)
 
     @property
     def voice(self):
@@ -234,33 +273,87 @@ class VoiceTextMessageConstructor(TextMessageConstructor):
         self._voice = voice
 
     @property
-    def text(self):
-        text = super().text
-        if text == Emoji.BAN:
-            return None
-        return text
+    def photo(self):
+        if not self._photo:
+            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_photo.jpg"))
+        return self._photo
 
-
-class Buttons:
-    @staticmethod
-    def back(text: str = Emoji.BACK):
-        return ButtonWidget(text=text, callback_data="bury")
+    @photo.setter
+    def photo(self, photo: str | FSInputFile):
+        self._photo = photo
 
     @staticmethod
-    def left(callback_data: str | CallbackData, text: str = Emoji.LEFT, mark: str = "", ):
-        return ButtonWidget(
-            text=text, mark=mark, sep="", callback_data=callback_data
+    def split(size: int, items: Iterable[T]):
+        lines = []
+        line = []
+        for item in items:
+            if len(line) == size:
+                lines.append(line)
+                line = []
+            line.append(item)
+        lines.append(line)
+        return lines
+
+
+class Info(WindowBuilder):
+    def __init__(
+        self,
+        text: str,
+        back_text: str = "Ok",
+    ):
+        super().__init__(back_text=back_text)
+        self.info = text
+
+    async def init(self):
+        self.add_texts_rows(TextWidget(text=self.info))
+
+
+class Temp(WindowBuilder):
+    def __init__(
+        self,
+        text: str = f"{Emoji.HOURGLASS_START} Processing...",
+    ):
+        super().__init__(burying=False)
+        self.info = text
+
+    async def init(self):
+        self.add_texts_rows(TextWidget(text=self.info))
+
+
+class Input(WindowBuilder):
+    def __init__(
+        self,
+        prompt: str,
+        state: State | str,
+        back_text: str = f"{Emoji.DENIAL} Cancel",
+    ):
+        super().__init__(state=state, back_text=back_text)
+        self.prompt = prompt
+
+    async def init(self):
+        self.add_texts_rows(TextWidget(text=self.prompt))
+
+
+class Conform(WindowBuilder):
+    def __init__(
+        self,
+        text: str,
+        yes_callback_data: str | CallbackData,
+        *,
+        no_callback_data: str | CallbackData = "bury",
+        yes_text: str = f"{Emoji.OK} Yes",
+        no_text: str = f"{Emoji.DENIAL} No",
+    ):
+        super().__init__(back_text=no_text, burying=False)
+        self.yes_callback_data = yes_callback_data
+        self.no_callback_data = no_callback_data
+        self.yes_text = yes_text
+        self.prompt = text
+        self.no_text = no_text
+
+    async def init(self):
+        self.add_texts_rows(TextWidget(text=self.prompt))
+        self.add_buttons_in_new_row(
+            ButtonWidget(text=self.yes_text, callback_data=self.yes_callback_data),
+            ButtonWidget(text=self.no_text, callback_data=self.no_callback_data)
         )
-
-    @staticmethod
-    def right(callback_data: str | CallbackData, text: str = Emoji.RIGHT, mark: str = ""):
-        return ButtonWidget(
-            text=text, mark=mark, sep="", callback_data=callback_data, mark_left=False
-        )
-
-
-class Texts:
-    @staticmethod
-    def error_loading_data():
-        return TextWidget(text=f"Error during data loading {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry")
-

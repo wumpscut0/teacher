@@ -1,12 +1,12 @@
 import os
-from typing import Type, List
+from typing import List
 
 from aiogram import Dispatcher, Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, Redis
 from aiogram.types import BotCommand
 
-from core import TextMessageConstructor, BotCommands, SCHEDULER, UserStorage
+from core import WindowBuilder, BotCommands, SCHEDULER
 from core.handlers.abyss import abyss_router
 from core.handlers.commands import default_commands_router
 from core.middleware import BuildBotControl
@@ -23,10 +23,9 @@ class BuildBot:
             self,
             *routers,
             token: str,
-            private_title_screen: TextMessageConstructor,
-            group_title_screen: TextMessageConstructor,
-            hello_screen: TextMessageConstructor,
-            cache: Type[UserStorage]
+            private_title_screen: WindowBuilder,
+            group_title_screen: WindowBuilder,
+            hello_screen: WindowBuilder,
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
         self.dispatcher.update.middleware(BuildBotControl(
@@ -34,7 +33,6 @@ class BuildBot:
             private_title_screen,
             group_title_screen,
             hello_screen,
-            cache
         ))
         self.dispatcher.include_routers(default_commands_router, *routers, abyss_router)
         SCHEDULER.start()

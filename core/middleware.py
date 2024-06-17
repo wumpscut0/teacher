@@ -1,11 +1,12 @@
-from typing import Any, Dict, Callable, Awaitable, Type
+from typing import Any, Dict, Callable, Awaitable
 
 from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from core import BotControl, Info, TextMessageConstructor
-from core.redis import UserStorage, TitleScreens
+from core import BotControl, WindowBuilder
+from core.markups import Info
+from core.redis import TitleScreens
 from core.tools.emoji import Emoji
 from core.tools.loggers import errors
 
@@ -14,17 +15,15 @@ class BuildBotControl(BaseMiddleware):
     def __init__(
             self,
             bot: Bot,
-            private_title_screen: TextMessageConstructor,
-            group_title_screen: TextMessageConstructor,
-            hello_screen: TextMessageConstructor,
-            user_storage: Type[UserStorage],
+            private_title_screen: WindowBuilder,
+            group_title_screen: WindowBuilder,
+            hello_screen: WindowBuilder,
     ):
         self._bot = bot
         self._title_screens = TitleScreens(self._bot.id)
         self._title_screens.private_title_screen = private_title_screen
         self._title_screens.group_title_screen = group_title_screen
         self._title_screens.greetings = hello_screen
-        self._user_storage = user_storage
 
     async def __call__(
             self,
@@ -48,10 +47,8 @@ class BuildBotControl(BaseMiddleware):
             self._bot,
             str(await self._extract_chat_id(event)),
             state,
-            self._user_storage(await self._extract_user_id(event)),
             self._title_screens,
         )
-        bot_control.user_storage.name = await self._extract_first_name(event)
         return bot_control
 
     @classmethod

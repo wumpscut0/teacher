@@ -1,8 +1,7 @@
 import asyncio
 import os
 
-from cache import Cache
-from database.queries import drop_all, create_all
+# from database.queries import drop_all, create_all
 from group_markups import GroupPartyTitleScreen
 from private_markups import PrivateTuurngaidTitleScreen, Greetings
 from core.dispatcher import BuildBot
@@ -22,7 +21,6 @@ async def main():
         private_title_screen=PrivateTuurngaidTitleScreen(),
         group_title_screen=GroupPartyTitleScreen(),
         hello_screen=Greetings(),
-        cache=Cache
     ).start_polling(BotCommands.commands())
 
 

@@ -1,4 +1,5 @@
 import os
+from copy import copy
 from datetime import datetime, timedelta
 
 from aiogram import Bot, Router
@@ -10,10 +11,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 
 from config import AWAIT_TIME_MESSAGE_DELETE
-from core.markups.text_messages import Info
-from core.redis import ContextStorage, ContextStorage, UserStorage, TitleScreens
-from core.markups import TextMessageConstructor, PhotoTextMessageConstructor, VoiceTextMessageConstructor, \
-    TextMessageConstructor, ButtonWidget, TextWidget
+from core.redis import ContextStorage, ContextStorage, TitleScreens
+from core.markups import WindowBuilder, WindowBuilder, ButtonWidget, TextWidget, Info
 
 from core.tools.emoji import Emoji
 from core.tools.loggers import errors, info
@@ -84,28 +83,46 @@ class BotControl:
             bot: Bot,
             chat_id: str,
             state: FSMContext,
-            user_storage,
-            title_screens: TitleScreens
+            title_screens: TitleScreens,
+            user_id: str | int | None = None,
+            name: str | None = None
     ):
         self.chat_id = chat_id
-        self.user_storage = user_storage
+        self.name = name
+        self.user_id = user_id
         self.title_screens = title_screens
         self._context_storage = ContextStorage(self.chat_id, bot.id)
         self._state = state
         self._bot = bot
+        self._update_message = {
+            "text": self._update_text_message,
+            "photo": self._update_photo_message,
+            "voice": self._update_voice_message,
+        }
+        self._create_message = {
+            "text": self._create_text_message,
+            "photo": self._create_photo_message,
+            "voice": self._create_voice_message,
+        }
 
-    async def _actualize_markup(self, raw_markup: TextMessageConstructor):
+    async def _init(self, raw_markup: WindowBuilder):
         try:
-            await raw_markup.init()
+            if not raw_markup.freeze:
+                await raw_markup.init()
+                raw_markup.init_control()
+                fresh_markup = copy(raw_markup)
+                fresh_markup.text_map = []
+                fresh_markup.keyboard_map = [[]]
+                self._context_storage.dream(fresh_markup)
+            await self._state.set_state(raw_markup.state)
         except AttributeError:
             await self._come_out()
             raise ValueError("Error with trying init raw markup")
-        await self._state.set_state(raw_markup.state)
 
-    async def dig(self, *markups_: TextMessageConstructor):
+    async def dig(self, *markups_: WindowBuilder):
         await self._look_around(self._context_storage.dig(*markups_))
 
-    async def redirect_dig(self, markup: TextMessageConstructor):
+    async def redirect_dig(self, markup: WindowBuilder):
         await self._look_around(self._context_storage.dig(markup), dig_straight=False)
 
     async def get_current_point(self):
@@ -132,7 +149,7 @@ class BotControl:
         for message_id in self._context_storage.chat_messages_ids_pull:
             await self._delete_message(message_id)
 
-    async def _create_text_message(self, markup: TextMessageConstructor):
+    async def _create_text_message(self, markup: WindowBuilder):
         try:
             message = await self._bot.send_message(
                 chat_id=self.chat_id,
@@ -145,12 +162,11 @@ class BotControl:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
-    async def _update_text_message(self, markup: TextMessageConstructor):
+    async def _update_text_message(self, markup: WindowBuilder):
         last_message_id = self._context_storage.last_message_id
         if last_message_id is None:
             await self._create_text_message(markup)
             return
-
         try:
             await self._bot.edit_message_text(
                 chat_id=self.chat_id,
@@ -160,12 +176,12 @@ class BotControl:
             )
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
-            if "message is not modified" in e.message:
-                await self._update_text_message(self._context_storage.bury())
+            if "not modified" in e.message:
+                await self.bury()
             else:
-                await self._update_text_message(markup)
+                await self._update_message[markup.type](markup)
 
-    async def _create_photo_message(self, markup: PhotoTextMessageConstructor):
+    async def _create_photo_message(self, markup: WindowBuilder):
         try:
             message = await self._bot.send_photo(
                 chat_id=self.chat_id,
@@ -179,7 +195,7 @@ class BotControl:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
-    async def _update_photo_message(self, markup: PhotoTextMessageConstructor):
+    async def _update_photo_message(self, markup: WindowBuilder):
         last_message_id = self._context_storage.last_message_id
         if last_message_id is None:
             await self._create_photo_message(markup)
@@ -199,12 +215,12 @@ class BotControl:
             )
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
-            if "message is not modified" in e.message:
-                await self._update_photo_message(self._context_storage.bury())
+            if "not modified" in e.message:
+                await self.bury()
             else:
-                await self._update_photo_message(markup)
+                await self._update_message[markup.type](markup)
 
-    async def _create_voice_message(self, markup: VoiceTextMessageConstructor):
+    async def _create_voice_message(self, markup: WindowBuilder):
         try:
             message = await self._bot.send_voice(
                 chat_id=self.chat_id,
@@ -218,7 +234,7 @@ class BotControl:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
-    async def _update_voice_message(self, markup: VoiceTextMessageConstructor):
+    async def _update_voice_message(self, markup: WindowBuilder):
         last_message_id = self._context_storage.last_message_id
         if last_message_id is None:
             await self._create_voice_message(markup)
@@ -234,38 +250,20 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self._update_voice_message(self._context_storage.bury())
+                await self.bury()
             else:
-                await self._update_voice_message(markup)
+                await self._update_message[markup.type](markup)
 
-    async def _look_around(self, markup: TextMessageConstructor, dig_straight=True, _after_reset=False):
-        if not _after_reset:
-            await self._contextualize_chat()
-            await self._actualize_markup(markup)
+    async def _look_around(self, markup: WindowBuilder, dig_straight=True):
+        await self._contextualize_chat()
+        await self._init(markup)
         try:
-            if isinstance(markup, PhotoTextMessageConstructor):
-                if dig_straight:
-                    await self._update_photo_message(markup)
-                else:
-                    await self._create_photo_message(markup)
-            elif isinstance(markup, VoiceTextMessageConstructor):
-                if dig_straight:
-                    await self._update_voice_message(markup)
-                else:
-                    await self._create_voice_message(markup)
-            elif isinstance(markup, TextMessageConstructor):
-                if dig_straight:
-                    await self._update_text_message(markup)
-                else:
-                    await self._create_text_message(markup)
+            if dig_straight:
+                await self._update_message[markup.type](markup)
             else:
-                errors.critical(
-                    f"Incorrect markup instance.\n"
-                    f"Markup: {markup}"
-                )
-                raise ValueError
+                await self._create_message[markup.type](markup)
         except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
-            if _after_reset:
+            if self.title_screens.group_title_screen.__class__.__name__ == markup.__class__.__name__ or self.title_screens.private_title_screen.__class__.__name__ == markup.__class__.__name__:
                 errors.critical("Impossible restore context", exc_info=True)
                 raise ValueError("Impossible restore context")
             info.warning(f"broken contex", exc_info=True)
@@ -276,10 +274,8 @@ class BotControl:
             markup = self.title_screens.group_title_screen
         else:
             markup = self.title_screens.private_title_screen
-        self._context_storage.bury()
-        await self._actualize_markup(markup)
-        # await self.dream(markup)
-        await self._look_around(markup, _after_reset=True)
+        self._context_storage.come_out(markup)
+        await self.dig(Info(f"{Emoji.CRYING_CAT}"))
 
     async def _contextualize_chat(self):
         for chat_message_id in self._context_storage.chat_messages_ids_pull[:-1]:
