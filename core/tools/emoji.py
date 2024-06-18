@@ -1,4 +1,5 @@
 class Emoji:
+    LAMP = "💡"
     OK = "✅"
     DENIAL = "❌"
     INFO = "ℹ"
@@ -93,4 +94,10 @@ class Emoji:
     CHILD = "👶"
     OPEN_BOOK = "📖"
     BOX = "📦"
+    DNA = "🧬"
+    FLASK = "🧪"
+    BROKEN_ROSE = "🥀"
+    HYGEUM = "⚕"
+    WRITING_HAND = "✍"
+    UNIVERSE = "🌌"
 

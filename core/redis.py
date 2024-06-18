@@ -160,7 +160,8 @@ class ContextStorage(Storage):
 
     def dig(self, *markups):
         stack = self._context_stack
-        stack.extend(markups)
+        names = [i.id for i in stack]
+        stack.extend((markup for markup in markups if markup.id not in names))
         self._context_stack = stack
         return self.look_around
 

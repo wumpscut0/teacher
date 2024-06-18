@@ -38,7 +38,7 @@ class BuildBotControl(BaseMiddleware):
         except (ValueError, BaseException) as e:
             errors.critical(f"An error occurred when execution some handler", exc_info=True)
             await bot_control.dream(
-                Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"),
+                await Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry").update(),
             )
             raise e
 

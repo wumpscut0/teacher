@@ -187,9 +187,24 @@ class KeyboardMarkupConstructor:
 T = TypeVar("T")
 
 
+class _MetaReturnUpdateSelf(type):
+    @staticmethod
+    def _self_returner(update):
+        async def wrapper(self, *args, **kwargs):
+            await update(self, *args, **kwargs)
+            return self
+        return wrapper
+
+    def __new__(cls, name, bases, dct):
+        instance = super().__new__(cls, name, bases, dct)
+        instance.update = cls._self_returner(instance.update)
+        return instance
+
+
 class WindowBuilder(
     TextMarkupConstructor,
-    KeyboardMarkupConstructor
+    KeyboardMarkupConstructor,
+    metaclass=_MetaReturnUpdateSelf,
 ):
     _max_buttons = 100
     _max_symbols = 1024
@@ -198,6 +213,7 @@ class WindowBuilder(
     def __init__(
             self,
             *,
+            unique: bool = True,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
@@ -213,11 +229,14 @@ class WindowBuilder(
             size_page: int = 10,
             page: int = 0,
             data: list[Any] = None,
-            freeze: bool = False
     ):
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
-        self.freeze = freeze
+        if unique:
+            self.id = str(id(self))
+        else:
+            self.id = "common"
+        self.control_inited = False
         self._data = [] if data is None else data
         self._size_page = size_page
         if size_page > self._max_buttons:
@@ -253,14 +272,17 @@ class WindowBuilder(
     def partitioned_data(self, partitioned_data: List[Any]):
         self._partitioned_data[self.page % len(self._partitioned_data)] = partitioned_data
 
-    async def init(self):
-        ...
-
     def init_control(self):
         if len(self._partitioned_data) > 1:
             self.add_buttons_in_new_row(self.left, self.right)
         if self.burying:
             self.add_buttons_in_new_row(self.back)
+        self.control_inited = True
+
+    def reset(self):
+        self.text_map = []
+        self.keyboard_map = [[]]
+        self.control_inited = False
 
     @property
     def voice(self):
@@ -294,6 +316,9 @@ class WindowBuilder(
         lines.append(line)
         return lines
 
+    async def update(self, *args, **kwargs):
+        ...
+
 
 class Info(WindowBuilder):
     def __init__(
@@ -301,10 +326,10 @@ class Info(WindowBuilder):
         text: str,
         back_text: str = "Ok",
     ):
-        super().__init__(back_text=back_text)
+        super().__init__(unique=False, back_text=back_text)
         self.info = text
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text=self.info))
 
 
@@ -313,10 +338,10 @@ class Temp(WindowBuilder):
         self,
         text: str = f"{Emoji.HOURGLASS_START} Processing...",
     ):
-        super().__init__(burying=False)
+        super().__init__(unique=False, burying=False)
         self.info = text
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text=self.info))
 
 
@@ -327,10 +352,10 @@ class Input(WindowBuilder):
         state: State | str,
         back_text: str = f"{Emoji.DENIAL} Cancel",
     ):
-        super().__init__(state=state, back_text=back_text)
+        super().__init__(unique=False, state=state, back_text=back_text)
         self.prompt = prompt
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text=self.prompt))
 
 
@@ -344,14 +369,14 @@ class Conform(WindowBuilder):
         yes_text: str = f"{Emoji.OK} Yes",
         no_text: str = f"{Emoji.DENIAL} No",
     ):
-        super().__init__(back_text=no_text, burying=False)
+        super().__init__(unique=False, back_text=no_text, burying=False)
         self.yes_callback_data = yes_callback_data
         self.no_callback_data = no_callback_data
         self.yes_text = yes_text
         self.prompt = text
         self.no_text = no_text
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text=self.prompt))
         self.add_buttons_in_new_row(
             ButtonWidget(text=self.yes_text, callback_data=self.yes_callback_data),

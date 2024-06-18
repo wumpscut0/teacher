@@ -1,6 +1,6 @@
 import os
-from copy import copy
 from datetime import datetime, timedelta
+from typing import Any
 
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -21,16 +21,20 @@ from core.tools.loggers import errors, info
 class BotCommands:
     start = Command("start")
     exit = Command("exit")
+    continue_ = Command("continue")
 
     @classmethod
     def commands(cls):
         return [
             BotCommand(
-                command=f"/start", description=f"Продолжить {Emoji.ZAP}"
+                command=f"/continue", description=f"Продолжить {Emoji.ZAP}"
             ),
             BotCommand(
                 command="/exit", description=f"Закрыть {Emoji.ZZZ}"
             ),
+            BotCommand(
+                command="/start", description=f"Перезагрузить {Emoji.CYCLE}"
+            )
         ]
 
 
@@ -105,28 +109,19 @@ class BotControl:
             "voice": self._create_voice_message,
         }
 
-    async def _init(self, raw_markup: WindowBuilder):
-        try:
-            if not raw_markup.freeze:
-                await raw_markup.init()
-                raw_markup.init_control()
-                fresh_markup = copy(raw_markup)
-                fresh_markup.text_map = []
-                fresh_markup.keyboard_map = [[]]
-                self._context_storage.dream(fresh_markup)
-            await self._state.set_state(raw_markup.state)
-        except AttributeError:
-            await self._come_out()
-            raise ValueError("Error with trying init raw markup")
-
     async def dig(self, *markups_: WindowBuilder):
         await self._look_around(self._context_storage.dig(*markups_))
 
     async def redirect_dig(self, markup: WindowBuilder):
         await self._look_around(self._context_storage.dig(markup), dig_straight=False)
 
-    async def get_current_point(self):
-        return self._context_storage.look_around
+    async def get_raw_current_markup(self) -> Any:
+        """
+        :return: last added window builder without text_map and keyboard_map
+        """
+        point = self._context_storage.look_around
+        point.reset()
+        return point
 
     async def dream(self, markup):
         await self._look_around(self._context_storage.dream(markup))
@@ -177,7 +172,7 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.bury()
+                await self.dig(markup)
             else:
                 await self._update_message[markup.type](markup)
 
@@ -200,7 +195,6 @@ class BotControl:
         if last_message_id is None:
             await self._create_photo_message(markup)
             return
-
         try:
             await self._bot.edit_message_media(
                 chat_id=self.chat_id,
@@ -216,7 +210,7 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.bury()
+                await self.dig(markup)
             else:
                 await self._update_message[markup.type](markup)
 
@@ -250,13 +244,15 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.bury()
+                await self.dig(markup)
             else:
                 await self._update_message[markup.type](markup)
 
     async def _look_around(self, markup: WindowBuilder, dig_straight=True):
         await self._contextualize_chat()
-        await self._init(markup)
+        await self._state.set_state(markup.state)
+        if not markup.control_inited:
+            markup.init_control()
         try:
             if dig_straight:
                 await self._update_message[markup.type](markup)
@@ -266,16 +262,17 @@ class BotControl:
             if self.title_screens.group_title_screen.__class__.__name__ == markup.__class__.__name__ or self.title_screens.private_title_screen.__class__.__name__ == markup.__class__.__name__:
                 errors.critical("Impossible restore context", exc_info=True)
                 raise ValueError("Impossible restore context")
-            info.warning(f"broken contex", exc_info=True)
+            errors.error(f"broken contex", exc_info=True)
+
             await self._come_out()
 
     async def _come_out(self):
         if self.chat_id.startswith("-"):
-            markup = self.title_screens.group_title_screen
+            markup = await self.title_screens.group_title_screen.update()
         else:
-            markup = self.title_screens.private_title_screen
+            markup = await self.title_screens.private_title_screen.update()
         self._context_storage.come_out(markup)
-        await self.dig(Info(f"{Emoji.CRYING_CAT}"))
+        await self.dig(markup)
 
     async def _contextualize_chat(self):
         for chat_message_id in self._context_storage.chat_messages_ids_pull[:-1]:
@@ -300,6 +297,12 @@ class BotControl:
             trigger="date",
             run_date=datetime.now() + timedelta(minutes=await_time),
         )
+
+    async def reset(self):
+        for message_id in self._context_storage.chat_messages_ids_pull:
+            await self._delete_message(message_id)
+        self._context_storage.chat_messages_ids_pull = []
+        await self._come_out()
 
     # async def api_status_code_processing(self, code: int, *expected_codes: int) -> bool:
     #     if code in expected_codes:

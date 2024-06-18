@@ -14,8 +14,6 @@ class GroupPartyTitleScreen(WindowBuilder):
     def __init__(self):
         super().__init__(type_="photo", burying=False)
         self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/Tuurngaid.jpg"))
-
-    async def init(self):
         self.keyboard_map = [
             [
                 ButtonWidget(text=f"Get offer {Emoji.BOX}", callback_data="get_offer")
@@ -35,13 +33,14 @@ class WordTickCallbackData(CallbackData, prefix="word_tick"):
 
 class AcceptOffer(WindowBuilder):
     def __init__(self, data: List[WordModel]):
-        super().__init__(data=[ButtonWidget(
-            mark=Emoji.OK,
-            text=f"{word.eng}:{", ".join(word.translate)}",
-            callback_data=WordTickCallbackData(index=i)
-        ) for i, word in enumerate(data)])
+        super().__init__(
+            data=[ButtonWidget(
+                mark=Emoji.OK,
+                text=f"{word.eng}:{", ".join(word.translate)}",
+                callback_data=WordTickCallbackData(index=i)
+            ) for i, word in enumerate(data)])
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text="I have some offer from the community"))
         self.add_buttons_as_column(
             *self.partitioned_data,
@@ -55,13 +54,14 @@ class AcceptOffer(WindowBuilder):
 
 class EditEnglishRun(WindowBuilder):
     def __init__(self, data: List[WordModel]):
-        super().__init__(data=[ButtonWidget(
-            mark=Emoji.OK,
-            text=f"{word.eng}:{", ".join(word.translate)}",
-            callback_data=WordTickCallbackData(index=i)
-        ) for i, word in enumerate(data)])
+        super().__init__(
+            data=[ButtonWidget(
+                mark=Emoji.OK,
+                text=f"{word.eng}:{", ".join(word.translate)}",
+                callback_data=WordTickCallbackData(index=i)
+            ) for i, word in enumerate(data)])
 
-    async def init(self):
+    async def update(self):
         self.add_texts_rows(TextWidget(text=f"Edit English Run {Emoji.LIST_WITH_PENCIL}"))
         self.add_buttons_as_column(
             *self.partitioned_data,
