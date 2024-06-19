@@ -1,6 +1,6 @@
 import os
 import pickle
-from typing import Union, Any, List
+from typing import Union, Any, List, Dict, Hashable
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
@@ -86,6 +86,30 @@ class Storage:
 
     def _set(self, key: str, value: Any):
         self.STORAGE.set(f"{key}:{self._id_}", value)
+
+
+class ImmuneDict(Storage):
+    def __init__(self, dict_name: str = "common_dict"):
+        super().__init__(dict_name)
+
+    @property
+    def _dict(self) -> Dict[Hashable, Any]:
+        return self._get(self._id_, {})
+
+    def __getitem__(self, item: Hashable):
+        return self._dict.get(item)
+
+    @_dict.setter
+    def _dict(self, dict_: Dict[Hashable, Any]):
+        self._set(self._id_, dict_)
+
+    def __setitem__(self, key: Hashable, value: Any):
+        dict_ = self._dict
+        dict_[key] = value
+        self._dict = dict_
+
+    def destroy(self):
+        self._dict = None
 
 
 class TitleScreens(Storage):

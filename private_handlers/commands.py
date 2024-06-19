@@ -23,16 +23,14 @@ class BotCommands:
 
     @classmethod
     def commands(cls):
-        return [BotCommand(command="/offer_word", description=f"Предложить новое слово")]
+        return [BotCommand(command="/offer_word", description=f"Suggest a word")]
 
 
 @commands_router.message(BotCommands.offer_word)
 async def offer_word(message: Message, bot_control: BotControl):
     await message.delete()
     await bot_control.dig(await Input(
-        f"Enter the english word or short phrase {Emoji.PENCIL}\n\n"
-        f"Max english word or phrase length is {ENG_LENGTH} symbols\n"
-        f"English word or phrase must contains only [latin letters, -, spaces] symbols",
+        "Suggest a ENGLISH/RUSSIAN word to Tuurngait that goes in the English Run.",
         back_text=Emoji.BACK,
         state=States.input_text_new_eng_word
     ).update())

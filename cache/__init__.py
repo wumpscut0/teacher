@@ -1,6 +1,6 @@
 from typing import List
 
-from core.redis import Storage
+from core.redis import Storage, ImmuneDict
 from database.models import WordModel
 
 
@@ -17,3 +17,18 @@ class Offer(Storage):
         offer_list = self.offer
         offer_list.append(word)
         self.offer = offer_list
+
+
+class TranslateCache(ImmuneDict):
+    def __init__(self):
+        super().__init__("translate_dict")
+
+
+class WordEntriesCache(ImmuneDict):
+    def __init__(self):
+        super().__init__("word_entries")
+
+
+class YandexDictCache(ImmuneDict):
+    def __init__(self):
+        super().__init__("yandex_dict_cache")

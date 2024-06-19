@@ -19,6 +19,12 @@ class EnglishRun(Base):
     completed_datetime = Column(DateTime, default=datetime.now())
 
 
+# class UserEnglishRun(Base):
+#     __tablename__ = "user_english_run"
+#     id = Column(Integer, autoincrement=True)
+#     user_id = Column(String, ForeignKey("user.id"))
+
+
 class User(Base):
     __tablename__ = "user"
     id = Column(String, primary_key=True)
