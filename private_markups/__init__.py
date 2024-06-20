@@ -1,5 +1,4 @@
 import os
-from fractions import Fraction
 
 import Levenshtein
 from collections import defaultdict
@@ -9,9 +8,9 @@ from aiogram.types import FSInputFile
 from pydantic import BaseModel
 
 from FSM import States
-from core import ButtonWidget, WindowBuilder, Emoji
+from core import ButtonWidget, WindowBuilder
 from core.markups import DataTextWidget, TextWidget
-from core.tools import create_progress_text
+from tools import Emoji, create_progress_text
 
 
 class Greetings(WindowBuilder):

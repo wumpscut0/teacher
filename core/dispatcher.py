@@ -4,7 +4,7 @@ from typing import List
 from aiogram import Dispatcher, Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, Redis
-from aiogram.types import BotCommand, BotCommandScopeDefault
+from aiogram.types import BotCommand
 
 from core import WindowBuilder, BotCommands, SCHEDULER
 from core.group_commands import group_commands

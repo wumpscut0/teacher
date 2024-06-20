@@ -14,5 +14,5 @@ class CustomMessage(WindowBuilder):
         print("Initializing logic")
 
 
-await BotControl(...).dig(CustomMessage("hello", kwarg1="world"))
+await BotControl(...).extend(CustomMessage("hello", kwarg1="world"))
 ```

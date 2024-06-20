@@ -6,8 +6,8 @@ from aiogram.types import FSInputFile
 
 from core import WindowBuilder, ButtonWidget, TextWidget
 
-from core.tools import Emoji
 from database.models import WordModel
+from tools import Emoji
 
 
 class GroupPartyTitleScreen(WindowBuilder):
@@ -32,11 +32,11 @@ class WordTickCallbackData(CallbackData, prefix="word_tick"):
 
 
 class AcceptOffer(WindowBuilder):
-    def __init__(self, data: List[WordModel]):
+    def __init__(self, data: List[str]):
         super().__init__(
             data=[ButtonWidget(
                 mark=Emoji.OK,
-                text=f"{word.eng}:{", ".join(word.translate)}",
+                text=word,
                 callback_data=WordTickCallbackData(index=i)
             ) for i, word in enumerate(data)])
 
@@ -57,7 +57,7 @@ class EditEnglishRun(WindowBuilder):
         super().__init__(
             data=[ButtonWidget(
                 mark=Emoji.OK,
-                text=f"{word.eng}:{", ".join(word.translate)}",
+                text=word.word,
                 callback_data=WordTickCallbackData(index=i)
             ) for i, word in enumerate(data)])
 

@@ -8,7 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.state import State
 
-from core.tools.emoji import Emoji
+from tools import Emoji
 
 
 class TextWidget:

@@ -35,7 +35,7 @@ async def insert_new_words(*words: WordModel):
     for word in words:
         try:
             async with async_session.begin() as session:
-                await session.execute(insert(Word).values(eng=word.eng, translate=word.translate))
+                await session.execute(insert(Word).values(**word.model_dump()))
         except IntegrityError:
             pass
     await session.commit()
@@ -44,5 +44,5 @@ async def insert_new_words(*words: WordModel):
 async def delete_words(*words: str):
     async with async_session.begin() as session:
         for word in words:
-            await session.execute(delete(Word).where(Word.eng == word))
+            await session.execute(delete(Word).where(Word.word == word))
     await session.commit()

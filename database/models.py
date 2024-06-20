@@ -1,8 +1,7 @@
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, ARRAY
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -19,10 +18,11 @@ class EnglishRun(Base):
     completed_datetime = Column(DateTime, default=datetime.now())
 
 
-# class UserEnglishRun(Base):
-#     __tablename__ = "user_english_run"
-#     id = Column(Integer, autoincrement=True)
-#     user_id = Column(String, ForeignKey("user.id"))
+class UserWord(Base):
+    __tablename__ = "user_word"
+    user_id = Column(String, ForeignKey("user.id"), nullable=False)
+    word = Column(String, ForeignKey("word.word"), nullable=False)
+    knowledge = Column(Integer, default=0)
 
 
 class User(Base):
@@ -31,14 +31,12 @@ class User(Base):
 
 
 class WordModel(BaseModel):
-    eng: str
-    translate: List[str]
+    word: str
 
 
 class Word(Base):
     __tablename__ = "word"
-    eng = Column(String, nullable=False, primary_key=True)
-    translate = Column(ARRAY(String), nullable=False)
+    word = Column(String, nullable=False, primary_key=True, unique=True)
 
     def as_model(self):
         return WordModel(**{c.name: getattr(self, c.name) for c in self.__table__.columns})
