@@ -4,7 +4,6 @@ from aiogram.types import CallbackQuery
 from cache import Offer
 from core import BotControl, Routers
 from core.markups import Info
-from database.models import WordModel
 from database.queries import insert_new_words, select_words, delete_words
 from group_markups import EditEnglishRun, WordTickCallbackData, AcceptOffer
 from tools import Emoji
@@ -51,14 +50,14 @@ async def marking_words(callback: CallbackQuery, callback_data: WordTickCallback
 @party_router.callback_query(F.data == "accept_edit_english_run")
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
     markup = bot_control.last
-    await delete_words(*(word.only_text.split(":")[0] for word in markup.data if word.mark == Emoji.DENIAL))
+    await delete_words((word.only_text for word in markup.data if word.mark == Emoji.DENIAL))
     await bot_control.pop_last()
 
 
 @party_router.callback_query(F.data == "accept_offer")
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
     markup = bot_control.last
-    await insert_new_words(*(WordModel(word=word) for word in markup.data if word.mark == Emoji.OK))
+    await insert_new_words((word.only_text for word in markup.data if word.mark == Emoji.OK))
     await bot_control.pop_last()
     Offer().destroy()
 

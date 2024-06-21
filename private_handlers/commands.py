@@ -27,7 +27,7 @@ class BotCommands:
 async def offer_word(message: Message, bot_control: BotControl):
     await message.delete()
     await bot_control.append(await Input(
-        "Suggest a ENGLISH or RUSSIAN word to Tuurngait that goes in the English Run.",
+        "Suggest a ENGLISH word to Tuurngait that goes in the English Run.",
         back_text=Emoji.BACK,
         state=States.input_text_suggest_word
     ).update())
@@ -38,9 +38,9 @@ async def offer_word(message: Message, bot_control: BotControl):
     word = message.text.translate(str.maketrans("", "", string.punctuation.replace("-", "") + "№\n "))
     await message.delete()
 
-    if len(word) > WORD_LENGTH or not re.fullmatch(r"[a-zA-Zа-яА-Я-]+", word):
+    if len(word) > WORD_LENGTH or not re.fullmatch(r"[a-zA-Z-]+", word):
         await bot_control.set_last(await Input(
-            "Suggest a ENGLISH or RUSSIAN word to Tuurngait that goes in the English Run.\n"
+            "Suggest a ENGLISH word to Tuurngait that goes in the English Run.\n"
             "Your input incorrect.",
             back_text=Emoji.BACK,
             state=States.input_text_suggest_word

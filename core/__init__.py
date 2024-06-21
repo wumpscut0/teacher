@@ -90,12 +90,12 @@ class BotControl(ImmuneList):
         await self.push()
 
     async def extend(self, *markups_: WindowBuilder):
-        ids = [i.id for i in self.list]
+        ids = [i.id for i in self._list]
         super().extend((markup for markup in markups_ if markup.id not in ids))
         await self.push()
 
     async def append(self, markup: WindowBuilder):
-        if markup.id in [i.id for i in self.list]:
+        if markup.id in [i.id for i in self._list]:
             super().append(markup)
         await self.push()
 
@@ -110,7 +110,7 @@ class BotControl(ImmuneList):
             else:
                 markup = await self._set_up_windows["private_title_screen"].update()
         super().reset(markup)
-        for message_id in self._messages_storage.list:
+        for message_id in self._messages_storage._list:
             await self._delete_message(message_id)
         self._messages_storage.destroy()
         await self.push()
@@ -245,7 +245,7 @@ class BotControl(ImmuneList):
 
     async def push(self, force=False):
         try:
-            markup = self.list[-1]
+            markup = self._list[-1]
         except IndexError:
             await self.reset()
             return
@@ -265,9 +265,9 @@ class BotControl(ImmuneList):
 
     async def clear_chat(self, force: bool = False):
         if force:
-            messages_ids = self._messages_storage.list
+            messages_ids = self._messages_storage._list
         else:
-            messages_ids = self._messages_storage.list[:-1]
+            messages_ids = self._messages_storage._list[:-1]
         for chat_message_id in messages_ids:
             await self._delete_message(chat_message_id)
 

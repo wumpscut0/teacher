@@ -1,13 +1,15 @@
 import os
+import string
+from random import randint, choice
 
 import Levenshtein
 from collections import defaultdict
 from typing import List
 
 from aiogram.types import FSInputFile
-from pydantic import BaseModel
 
 from FSM import States
+from api import WordData
 from core import ButtonWidget, WindowBuilder
 from core.markups import DataTextWidget, TextWidget
 from tools import Emoji, create_progress_text
@@ -33,55 +35,46 @@ class PrivateTuurngaidTitleScreen(WindowBuilder):
         ]
 
 
-class Card(BaseModel):
-    question: str
-    answer: str
-
-
 class English(WindowBuilder):
-    def __init__(self, cards: List[Card]):
+    _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
+
+    def __init__(self, cards: List[WordData]):
         super().__init__(state=States.input_text_word_translate)
         self._cards = cards
         self._possible_scores = len(self._cards)
-        self._current_card = self._cards.pop()
+        self._pop_card()
         self._rewards = defaultdict(int)
         self._score = 0
-        self.add_texts_rows(DataTextWidget(text=f"Translate", data=f"{self._current_card.question}"))
+        self.add_texts_rows(DataTextWidget(text=f"Translate", data=f"{self._current_card["original"]}"))
         self.back.text = f"Cancel run {Emoji.DENIAL}"
 
     async def update(self, answer: str):
-        self.add_texts_rows(DataTextWidget(text=f"{Emoji.OPEN_BOOK} Word", data=self._current_card.question + "\n\n"))
         progress, user_correct_answers = self._levenshtein_distance(answer)
         if user_correct_answers:
-
-            self.add_texts_rows(
-                DataTextWidget(text=f"{Emoji.BRAIN} Correct", data=", ".join(user_correct_answers)),
-
-            )
-            if len(user_correct_answers) != len(self._current_card.answer.split(", ")):
+            if Emoji.FLASK in progress:
                 self.add_texts_rows(
-                    DataTextWidget(text=f"{Emoji.WRITING_HAND} Full answer", data=f"{self._current_card.answer}\n\n")
+                    DataTextWidget(text=f"{Emoji.BRAIN} Correct", data=answer),
+                    DataTextWidget(text=progress)
                 )
             else:
                 self.add_texts_rows(
-                    TextWidget(text=f"{Emoji.UNIVERSE} Perfectly!\n\n")
+                    TextWidget(text=f"{Emoji.UNIVERSE} Perfectly!")
                 )
             self._score += 1
         else:
             self.add_texts_rows(
                 TextWidget(text=progress),
                 DataTextWidget(text=f"{Emoji.BROKEN_ROSE} Wrong answer", data=answer),
-                DataTextWidget(text=f"{Emoji.HYGEUM} Correct answer", data=f"{self._current_card.answer}\n\n")
             )
-
+        self._open_card()
         try:
-            self._current_card = self._cards.pop()
+            self._pop_card()
         except IndexError:
             self.state = None
             self.add_texts_rows(DataTextWidget(text=f"Your result", data=f"{self._score}/{self._possible_scores}"))
             self.back.text = f"Ok"
         else:
-            self.add_texts_rows(DataTextWidget(text=f"{Emoji.LAMP} Translate", data=f"{self._current_card.question}"))
+            self.add_texts_rows(DataTextWidget(text=f"{Emoji.LAMP} Translate", data=f"{self._current_card["original"]}"))
             self.back.text = f"Cancel run {Emoji.DENIAL}"
 
         for threshold in range(5, self._possible_scores, 5):
@@ -94,9 +87,26 @@ class English(WindowBuilder):
         else:
             self.type = "text"
 
+    def _pop_card(self):
+        if randint(0, 1):
+            self._current_card = self._cards.pop().get_random_default()
+            self._card_is_default = True
+        else:
+            self._current_card = self._cards.pop().get_random_example()
+            self._card_is_default = False
+
     def _levenshtein_distance(self, answer: str):
-        user_answers = set(answer.split(", "))
-        correct_answers = self._current_card.answer.split(", ")
+        if self._card_is_default:
+            if isinstance(self._current_card["translate"], list):
+                correct_answers = list(map(lambda x: x.strip.lower(), self._current_card["translate"]))
+                user_answers = set(map(lambda x: x.strip.lower().strip().translate(self._cleaner), answer.split(",")))
+            else:
+                correct_answers = [self._current_card["translate"].lower()]
+                user_answers = [answer.lower().strip().translate(self._cleaner)]
+        else:
+            correct_answers = [" ".join(map(lambda x: x.strip(), self._current_card["translate"].translate(self._cleaner).lower().split()))]
+            user_answers = [" ".join(map(lambda x: x.strip(), answer.translate(self._cleaner).lower().split()))]
+
         distances = []
         user_correct_answers = []
         for user_answer in user_answers:
@@ -120,3 +130,28 @@ class English(WindowBuilder):
             progress_element=Emoji.FLASK, remaining_element=Emoji.DNA
         )
         return progress[::-1], user_correct_answers
+
+    def _open_card(self):
+        self.add_texts_rows(
+            DataTextWidget(text="Word", data=self._current_card.word)
+        )
+        data = self._current_card.data
+        if data["audio"]:
+            self.voice = choice(data["audio"])
+            self.type = "voice"
+        else:
+            self.type = "text"
+
+        self.add_texts_rows(
+            DataTextWidget(text="Transcription", data=data["ts"]),
+        )
+        for pos, value in data["pos"].items():
+            self.add_texts_rows(
+                TextWidget(text=f"\nas {pos}"),
+                DataTextWidget(text="Translates", data=', '.join(value["tr"])),
+                DataTextWidget(text="Synonyms", data=', '.join(value["syn"])),
+            )
+            for example in value.get("examples", []):
+                self.add_texts_rows(
+                    DataTextWidget(text="Examples", data=f"{example["original"]} -> {example["translate"]}")
+                )

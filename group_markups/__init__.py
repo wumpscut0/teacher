@@ -6,7 +6,6 @@ from aiogram.types import FSInputFile
 
 from core import WindowBuilder, ButtonWidget, TextWidget
 
-from database.models import WordModel
 from tools import Emoji
 
 
@@ -53,11 +52,11 @@ class AcceptOffer(WindowBuilder):
 
 
 class EditEnglishRun(WindowBuilder):
-    def __init__(self, data: List[WordModel]):
+    def __init__(self, data: List[str]):
         super().__init__(
             data=[ButtonWidget(
                 mark=Emoji.OK,
-                text=word.word,
+                text=word,
                 callback_data=WordTickCallbackData(index=i)
             ) for i, word in enumerate(data)])
 
