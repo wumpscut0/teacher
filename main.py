@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+from database.queries import drop_all, create_all
 # from database.queries import drop_all, create_all
 from group_markups import GroupPartyTitleScreen
 from private_markups import PrivateTuurngaidTitleScreen, Greetings

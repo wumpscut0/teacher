@@ -1,27 +1,47 @@
-import random
+from asyncio import gather
+from random import shuffle
+from typing import List
 
 from aiogram import F
 from aiogram.types import CallbackQuery, Message
 
 from FSM import States
-from config import ENG_LENGTH
+from api import SuperEnglishDictionary
+from config import WORD_LENGTH
 from core.markups import Input, Info
 
 from database.queries import select_words
 from core import BotControl, Routers
-from core.tools import Emoji
-from private_markups import English, Card
+from private_markups import English
+from tools import Emoji
 
 english_router = Routers.private()
+
+
+async def shuffle_deck(words: List[str], bot_control: BotControl, size: int):
+    shuffle(words)
+    cards = await gather(*(SuperEnglishDictionary.extract_data(word) for word in words[:size]))
+    c = English(cards)
+    c.draw_card()
+    await bot_control.set_current(
+        c
+    )
 
 
 @english_router.callback_query(F.data == "run_english")
 async def run_english(callback: CallbackQuery, bot_control: BotControl):
     words = await select_words()
-    await bot_control.dig(await Input(
-        f"How many words do you want to repeat?\nEnter a integer at 1 to {len(words) * 2}\n\n",
-        state=States.input_text_how_many_words
-    ).update())
+    if words:
+        if len(words) == 1:
+            await shuffle_deck(words, bot_control, 1)
+        else:
+            await bot_control.append(await Input(
+                f"How many words do you want to repeat?\nEnter a integer at 1 to {len(words)}",
+                state=States.input_text_how_many_words
+            ).update())
+        return
+
+    await bot_control.append(await Info(f"No words so far {Emoji.CRYING_CAT}\nYou can suggest a word to Tuurngaid /offer_word").update())
 
 
 @english_router.message(States.input_text_how_many_words, F.text)
@@ -29,36 +49,41 @@ async def accept_input_text_how_many_words(message: Message, bot_control: BotCon
     value = message.text
     await message.delete()
 
-    words = await select_words()
     try:
         value = int(value)
     except ValueError:
         return
-    if not 1 <= value <= len(words) * 2:
+
+    words = await select_words()
+    if not 1 <= value <= len(words):
         return
 
-    cards = [Card(question=word.eng, answer=', '.join(word.translate)) for word in words]
-    cards.extend([Card(question=card.answer, answer=card.question) for card in cards])
-
-    if not words:
-        await bot_control.dream(await Info(
-            f"No words so far {Emoji.CRYING_CAT}\n"
-            f"You can offer a new word /offer_word"
-        ).update())
-        return
-
-    random.shuffle(cards)
-    await bot_control.dream(
-        English(cards[:value])
-    )
+    await shuffle_deck(words, bot_control, value)
 
 
 @english_router.message(States.input_text_word_translate, F.text)
 async def accept_input_text_word_translate(message: Message, bot_control: BotControl):
-    answer = message.text.strip().lower()
+    answer = message.text
     await message.delete()
-    if len(answer) > ENG_LENGTH:
-        await bot_control.dig(await Info(f"Max symbols is {ENG_LENGTH} {Emoji.CRYING_CAT}").update())
+    if len(answer) > WORD_LENGTH:
+        await bot_control.extend(await Info(f"Max symbols is {WORD_LENGTH} {Emoji.CRYING_CAT}").update())
         return
 
-    await bot_control.dream(await (await bot_control.get_raw_current_markup()).update(answer))
+    await bot_control.set_current(await bot_control.current.update(answer))
+
+
+@english_router.callback_query(F.data == "reference")
+async def reference(callback: CallbackQuery, bot_control: BotControl):
+    c: English = bot_control.current
+    c.reference()
+    await bot_control.append(c)
+
+
+@english_router.callback_query(F.data == "draw_card")
+async def draw_card(callback: CallbackQuery, bot_control: BotControl):
+    c: English = bot_control.current
+    try:
+        c.draw_card()
+    except IndexError:
+        c.result()
+    await bot_control.set_current(c)

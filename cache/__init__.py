@@ -1,19 +1,15 @@
-from typing import List
-
-from core.redis import Storage
-from database.models import WordModel
+from tools import ImmuneList, ImmuneDict
 
 
-class Offer(Storage):
+class Offer(ImmuneList):
+    def __init__(self):
+        super().__init__("offer_list")
+
     @property
     def offer(self):
-        return self._get(f"offer", [])
+        return self._list
 
-    @offer.setter
-    def offer(self, offer: List[WordModel]):
-        self._set(f"offer", offer)
 
-    def replenish_offer(self, word: WordModel):
-        offer_list = self.offer
-        offer_list.append(word)
-        self.offer = offer_list
+class WordDataCache(ImmuneDict):
+    def __init__(self):
+        super().__init__("word_data")

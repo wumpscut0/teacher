@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import List
 
 from pydantic import BaseModel
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, ARRAY
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, JSON
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -23,16 +22,32 @@ class User(Base):
     __tablename__ = "user"
     id = Column(String, primary_key=True)
 
+    knowledge = relationship("WordUserKnowledge")
 
-class WordModel(BaseModel):
-    eng: str
-    translate: List[str]
+########################################################################################################################
 
 
 class Word(Base):
     __tablename__ = "word"
-    eng = Column(String, nullable=False, primary_key=True)
-    translate = Column(ARRAY(String), nullable=False)
+    word = Column(String, primary_key=True, unique=True)
+
+    def as_str(self):
+        for c in self.__table__.columns:
+            return getattr(self, c.name)
+
+
+########################################################################################################################
+
+class Knowledge(BaseModel):
+    translate: str
+    levenshtein_distances: list
+
+
+class WordUserKnowledge(Base):
+    __tablename__ = "user_word_knowledge"
+    user_id = Column(String, ForeignKey("user.id"), nullable=False, primary_key=True)
+    word = Column(String, ForeignKey("word.word"), nullable=False, primary_key=True)
+    knowledge = Column(JSON, default={})
 
     def as_model(self):
-        return WordModel(**{c.name: getattr(self, c.name) for c in self.__table__.columns})
+        return Knowledge(**{c.name: getattr(self, c.name) for c in self.__table__.columns if c.name not in ("user_id", "word")})

@@ -1,41 +1,20 @@
 import os
 from datetime import datetime, timedelta
-from typing import Any
 
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InputMediaPhoto, InputMediaAudio, Message, CallbackQuery, BotCommand
+from aiogram.types import InputMediaPhoto, InputMediaAudio, Message, CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 
 from config import AWAIT_TIME_MESSAGE_DELETE
-from core.redis import ContextStorage, ContextStorage, TitleScreens
 from core.markups import WindowBuilder, WindowBuilder, ButtonWidget, TextWidget, Info
 
-from core.tools.emoji import Emoji
-from core.tools.loggers import errors, info
+from core.loggers import errors, info
+from core.objects import _SetUpWindows, _UsersIds, _MessagesIds
 
-
-class BotCommands:
-    start = Command("start")
-    exit = Command("exit")
-    continue_ = Command("continue")
-
-    @classmethod
-    def commands(cls):
-        return [
-            BotCommand(
-                command=f"/continue", description=f"Продолжить {Emoji.ZAP}"
-            ),
-            BotCommand(
-                command="/exit", description=f"Закрыть {Emoji.ZZZ}"
-            ),
-            BotCommand(
-                command="/start", description=f"Перезагрузить {Emoji.CYCLE}"
-            )
-        ]
+from tools import ImmuneList, Emoji
 
 
 class _MessagePrivateFilter:
@@ -81,21 +60,23 @@ SCHEDULER.configure(
     )
 
 
-class BotControl:
+class BotControl(ImmuneList):
     def __init__(
             self,
             bot: Bot,
             chat_id: str,
             state: FSMContext,
-            title_screens: TitleScreens,
+            set_up_windows: _SetUpWindows,
             user_id: str | int | None = None,
             name: str | None = None
     ):
+        super().__init__(f"{chat_id}:{bot.id}:context_stack")
         self.chat_id = chat_id
-        self.name = name
         self.user_id = user_id
-        self.title_screens = title_screens
-        self._context_storage = ContextStorage(self.chat_id, bot.id)
+        self.name = name
+        self.user_uds = _UsersIds(bot.id)
+        self._set_up_windows = set_up_windows
+        self._messages_storage = _MessagesIds(self.chat_id, bot.id)
         self._state = state
         self._bot = bot
         self._update_message = {
@@ -103,46 +84,70 @@ class BotControl:
             "photo": self._update_photo_message,
             "voice": self._update_voice_message,
         }
-        self._create_message = {
-            "text": self._create_text_message,
-            "photo": self._create_photo_message,
-            "voice": self._create_voice_message,
-        }
 
-    async def dig(self, *markups_: WindowBuilder):
-        await self._look_around(self._context_storage.dig(*markups_))
+    async def greetings(self):
+        await self.append(await self._set_up_windows["greetings"].update())
+        await self.push()
 
-    async def redirect_dig(self, markup: WindowBuilder):
-        await self._look_around(self._context_storage.dig(markup), dig_straight=False)
+    async def extend(self, *markups_: WindowBuilder):
+        names = [i.__class__.__name__ for i in self._list]
+        to_extend = []
+        for markup in markups_:
+            if markup.unique and markup.__class__.__name__ in names:
+                continue
+            to_extend.append(markup)
+        super().extend(to_extend)
+        await self.push()
 
-    async def get_raw_current_markup(self) -> Any:
+    async def append(self, markup: WindowBuilder):
+        if markup.unique and markup.__class__.__name__ in (i.__class__.__name__ for i in self._list):
+            await self.push()
+        else:
+            super().append(markup)
+            await self.push()
+
+    async def pop_last(self):
+        super().pop_last()
+        await self.push()
+
+    async def reset(self, markup: WindowBuilder = None):
+        if markup is None:
+            if self.chat_id.startswith("-"):
+                markup = await self._set_up_windows["group_title_screen"].update()
+            else:
+                markup = await self._set_up_windows["private_title_screen"].update()
+        super().reset(markup)
+        for message_id in self._messages_storage._list:
+            await self._delete_message(message_id)
+        self._messages_storage.destroy()
+        await self.push()
+
+    def __getitem__(self, index: int):
+        raise SyntaxError
+
+    def __setitem__(self, key, value):
+        raise SyntaxError
+
+    @property
+    def current(self):
         """
         :return: last added window builder without text_map and keyboard_map
         """
-        point = self._context_storage.look_around
-        point.reset()
-        return point
+        try:
+            markup = self._list[-1]
+        except IndexError:
+            return
+        markup.reset()
+        return markup
 
-    async def dream(self, markup):
-        await self._look_around(self._context_storage.dream(markup))
-
-    async def bury(self):
-        markup = self._context_storage.bury()
-        if markup is None:
-            await self._come_out()
-        else:
-            await self._look_around(markup)
-
-    async def look_around(self):
-        markup = self._context_storage.look_around
-        if markup is None:
-            await self._come_out()
-        else:
-            await self._look_around(markup)
-
-    async def sleep(self):
-        for message_id in self._context_storage.chat_messages_ids_pull:
-            await self._delete_message(message_id)
+    async def set_current(self, markup: WindowBuilder):
+        try:
+            list_ = self._list
+            list_[-1] = markup
+            self._list = list_
+        except IndexError:
+            await self.reset(markup)
+        await self.push()
 
     async def _create_text_message(self, markup: WindowBuilder):
         try:
@@ -152,13 +157,13 @@ class BotControl:
                 reply_markup=markup.keyboard,
             )
             await self._delete_task_message(message_id=message.message_id)
-            self._context_storage.add_message_id(message.message_id)
+            self._messages_storage.append(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
     async def _update_text_message(self, markup: WindowBuilder):
-        last_message_id = self._context_storage.last_message_id
+        last_message_id = self._messages_storage[-1]
         if last_message_id is None:
             await self._create_text_message(markup)
             return
@@ -172,7 +177,7 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.dig(markup)
+                await self.extend(markup)
             else:
                 await self._update_message[markup.type](markup)
 
@@ -185,13 +190,13 @@ class BotControl:
                 reply_markup=markup.keyboard,
             )
             await self._delete_task_message(message_id=message.message_id)
-            self._context_storage.add_message_id(message.message_id)
+            self._messages_storage.append(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
     async def _update_photo_message(self, markup: WindowBuilder):
-        last_message_id = self._context_storage.last_message_id
+        last_message_id = self._messages_storage[-1]
         if last_message_id is None:
             await self._create_photo_message(markup)
             return
@@ -210,7 +215,7 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.dig(markup)
+                await self.extend(markup)
             else:
                 await self._update_message[markup.type](markup)
 
@@ -223,13 +228,13 @@ class BotControl:
                 reply_markup=markup.keyboard
             )
             await self._delete_task_message(message_id=message.message_id)
-            self._context_storage.add_message_id(message.message_id)
+            self._messages_storage.append(message.message_id)
         except TelegramBadRequest:
             errors.critical("Unsuccessfully creating text message.", exc_info=True)
             raise ValueError("Impossible create message")
 
     async def _update_voice_message(self, markup: WindowBuilder):
-        last_message_id = self._context_storage.last_message_id
+        last_message_id = self._messages_storage[-1]
         if last_message_id is None:
             await self._create_voice_message(markup)
             return
@@ -244,38 +249,36 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.dig(markup)
+                await self.extend(markup)
             else:
                 await self._update_message[markup.type](markup)
 
-    async def _look_around(self, markup: WindowBuilder, dig_straight=True):
-        await self._contextualize_chat()
+    async def push(self, force=False):
+        try:
+            markup = self._list[-1]
+        except IndexError:
+            await self.reset()
+            return
+
+        await self.clear_chat(force)
         await self._state.set_state(markup.state)
         if not markup.control_inited:
             markup.init_control()
         try:
-            if dig_straight:
-                await self._update_message[markup.type](markup)
-            else:
-                await self._create_message[markup.type](markup)
+            await self._update_message[markup.type](markup)
         except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
-            if self.title_screens.group_title_screen.__class__.__name__ == markup.__class__.__name__ or self.title_screens.private_title_screen.__class__.__name__ == markup.__class__.__name__:
+            if self._set_up_windows["group_title_screen"].__class__.__name__ == markup.__class__.__name__ or self._set_up_windows["private_title_screen"].__class__.__name__ == markup.__class__.__name__:
                 errors.critical("Impossible restore context", exc_info=True)
                 raise ValueError("Impossible restore context")
             errors.error(f"broken contex", exc_info=True)
+            await self.set_current(await Info(f"Something broken {Emoji.BROKEN_HEARTH} Sorry").update())
 
-            await self._come_out()
-
-    async def _come_out(self):
-        if self.chat_id.startswith("-"):
-            markup = await self.title_screens.group_title_screen.update()
+    async def clear_chat(self, force: bool = False):
+        if force:
+            messages_ids = self._messages_storage._list
         else:
-            markup = await self.title_screens.private_title_screen.update()
-        self._context_storage.come_out(markup)
-        await self.dig(markup)
-
-    async def _contextualize_chat(self):
-        for chat_message_id in self._context_storage.chat_messages_ids_pull[:-1]:
+            messages_ids = self._messages_storage._list[:-1]
+        for chat_message_id in messages_ids:
             await self._delete_message(chat_message_id)
 
     async def _delete_message(self, message_id: int):
@@ -286,7 +289,7 @@ class BotControl:
             await self._bot.delete_message(self.chat_id, message_id)
         except TelegramBadRequest:
             pass
-        self._context_storage.remove_message_id(message_id)
+        self._messages_storage.remove(message_id)
 
     async def _delete_task_message(self, message_id: int, await_time: int = AWAIT_TIME_MESSAGE_DELETE):
         SCHEDULER.add_job(
@@ -297,34 +300,3 @@ class BotControl:
             trigger="date",
             run_date=datetime.now() + timedelta(minutes=await_time),
         )
-
-    async def reset(self):
-        for message_id in self._context_storage.chat_messages_ids_pull:
-            await self._delete_message(message_id)
-        self._context_storage.chat_messages_ids_pull = []
-        await self._come_out()
-
-    # async def api_status_code_processing(self, code: int, *expected_codes: int) -> bool:
-    #     if code in expected_codes:
-    #         return True
-    #
-    #     if code == 401:
-    #         info.warning(f"Trying unauthorized access. User: {self.chat_id}")
-    #         await self.set_context(self._private_title_screen, self.chat_id)
-    #         await self._update_text_message(
-    #             Info,
-    #             f"Your session expired {Emoji.CRYING_CAT} Please, sign in again {Emoji.DOOR}"
-    #         )
-    #
-    #     elif code == 500:
-    #         errors.critical(f"Internal server error.")
-    #         await self._update_text_message(
-    #             Info,
-    #             f"Internal server error {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"
-    #         )
-    #     else:
-    #         errors.critical(f"Unexpected status from API: {code}")
-    #         await self._update_text_message(
-    #             Info, f"Something broken {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"
-    #         )
-    #     return False
