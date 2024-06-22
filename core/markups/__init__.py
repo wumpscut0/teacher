@@ -213,7 +213,7 @@ class WindowBuilder(
     def __init__(
             self,
             *,
-            unique: bool = True,
+            unique: bool = False,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
@@ -232,16 +232,13 @@ class WindowBuilder(
     ):
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
-        if unique:
-            self.id = str(id(self))
-        else:
-            self.id = "common"
+        self.unique = unique
         self.control_inited = False
-        self._data = [] if data is None else data
+        self.data = [] if data is None else data
         self._size_page = size_page
         if size_page > self._max_buttons:
             raise ValueError(f"Max size page is {self._max_buttons}")
-        self._partitioned_data = self.split(size_page, self._data)
+        self._partitioned_data = self.split(size_page, self.data)
         self.burying = burying
         self.page = page
         self.type = type_
@@ -255,14 +252,6 @@ class WindowBuilder(
             raise ValueError(f"Max symbols per message is {self._max_symbols}")
         if self.type not in self._available_types:
             raise ValueError(f"Available type is {self._available_types} not {self.type}")
-
-    @property
-    def data(self) -> List[Any]:
-        return [item for page in self._partitioned_data for item in page]
-
-    @data.setter
-    def data(self, data: List[Any]):
-        self._data = data
 
     @property
     def partitioned_data(self) -> List[Any]:

@@ -35,7 +35,7 @@ async def insert_new_words(words: Iterable):
     for word in words:
         try:
             async with async_session.begin() as session:
-                await session.execute(insert(Word).values(**word.model_dump()))
+                await session.execute(insert(Word).values(word=word))
         except IntegrityError:
             pass
     await session.commit()

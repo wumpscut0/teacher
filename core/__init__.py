@@ -14,7 +14,7 @@ from core.markups import WindowBuilder, WindowBuilder, ButtonWidget, TextWidget,
 from core.loggers import errors, info
 from core.objects import _SetUpWindows, _UsersIds, _MessagesIds
 
-from tools import ImmuneList
+from tools import ImmuneList, Emoji
 
 
 class _MessagePrivateFilter:
@@ -90,14 +90,21 @@ class BotControl(ImmuneList):
         await self.push()
 
     async def extend(self, *markups_: WindowBuilder):
-        ids = [i.id for i in self._list]
-        super().extend((markup for markup in markups_ if markup.id not in ids))
+        names = [i.__class__.__name__ for i in self._list]
+        to_extend = []
+        for markup in markups_:
+            if markup.unique and markup.__class__.__name__ in names:
+                continue
+            to_extend.append(markup)
+        super().extend(to_extend)
         await self.push()
 
     async def append(self, markup: WindowBuilder):
-        if markup.id in [i.id for i in self._list]:
+        if markup.unique and markup.__class__.__name__ in (i.__class__.__name__ for i in self._list):
+            await self.push()
+        else:
             super().append(markup)
-        await self.push()
+            await self.push()
 
     async def pop_last(self):
         super().pop_last()
@@ -122,7 +129,7 @@ class BotControl(ImmuneList):
         raise SyntaxError
 
     @property
-    def last(self) -> WindowBuilder | None:
+    def current(self):
         """
         :return: last added window builder without text_map and keyboard_map
         """
@@ -133,11 +140,14 @@ class BotControl(ImmuneList):
         markup.reset()
         return markup
 
-    async def set_last(self, markup: WindowBuilder):
+    async def set_current(self, markup: WindowBuilder):
         try:
-            self._list[-1] = markup
+            list_ = self._list
+            list_[-1] = markup
+            self._list = list_
         except IndexError:
             await self.reset(markup)
+        await self.push()
 
     async def _create_text_message(self, markup: WindowBuilder):
         try:
@@ -261,7 +271,7 @@ class BotControl(ImmuneList):
                 errors.critical("Impossible restore context", exc_info=True)
                 raise ValueError("Impossible restore context")
             errors.error(f"broken contex", exc_info=True)
-            await self.reset()
+            await self.set_current(await Info(f"Something broken {Emoji.BROKEN_HEARTH} Sorry").update())
 
     async def clear_chat(self, force: bool = False):
         if force:

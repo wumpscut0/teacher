@@ -17,16 +17,16 @@ async def bury(message: Message, bot_control: BotControl):
 
 @abyss_router.callback_query(F.data == "flip_left")
 async def flip_left(message: Message, bot_control: BotControl):
-    markup = bot_control.last
+    markup = bot_control.current
     markup.page -= 1
-    bot_control.last = await markup.update()
+    await bot_control.set_current(await markup.update())
 
 
 @abyss_router.callback_query(F.data == "flip_right")
 async def flip_right(message: Message, bot_control: BotControl):
-    markup = bot_control.last
+    markup = bot_control.current
     markup.page += 1
-    bot_control.last = await markup.update()
+    await bot_control.set_current(await markup.update())
 
 
 @abyss_router.callback_query()

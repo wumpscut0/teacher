@@ -1,18 +1,17 @@
-from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, BotCommand
+from aiogram.types import BotCommand
 
 from tools import Emoji, ImmuneList, ImmuneSet, ImmuneDict
 
 
 class _SetUpWindows(ImmuneDict):
     def __init__(self, bot_id: str | int):
-        super().__init__(bot_id + ":set_up_windows")
+        super().__init__(f"{bot_id}:set_up_windows")
 
 
 class _UsersIds(ImmuneSet):
     def __init__(self, bot_id: str | int):
-        super().__init__(bot_id + ":user_ids")
+        super().__init__(f"{bot_id}:user_ids")
 
 
 class _MessagesIds(ImmuneList):

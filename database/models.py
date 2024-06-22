@@ -22,7 +22,7 @@ class User(Base):
     __tablename__ = "user"
     id = Column(String, primary_key=True)
 
-    word = relationship("UserWord")
+    knowledge = relationship("WordUserKnowledge")
 
 ########################################################################################################################
 

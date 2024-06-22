@@ -10,7 +10,7 @@ group_commands = Routers.group()
 @default_commands_router.message(_BotCommands.start)
 async def reset(message: Message, bot_control: BotControl):
     await message.delete()
-    if bot_control.user_id not in bot_control.user_uds:
+    if bot_control.user_id not in bot_control.user_uds.set:
         await bot_control.greetings()
         bot_control.user_uds.add(bot_control.user_id)
         return

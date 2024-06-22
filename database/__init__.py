@@ -2,7 +2,8 @@ import json
 import os
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-
+from dotenv import find_dotenv, load_dotenv
+load_dotenv(find_dotenv())
 
 async_engine = create_async_engine(
     os.getenv("DATABASE"),

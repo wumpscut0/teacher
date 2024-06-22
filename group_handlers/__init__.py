@@ -38,25 +38,25 @@ async def edit_english_run(callback: CallbackQuery, bot_control: BotControl):
 
 @party_router.callback_query(WordTickCallbackData.filter())
 async def marking_words(callback: CallbackQuery, callback_data: WordTickCallbackData, bot_control: BotControl):
-    markup = bot_control.last
-    if markup.data[callback_data.index].mark == Emoji.OK:
-        markup.data[callback_data.index].mark = Emoji.DENIAL
+    markup = bot_control.current
+    if markup.partitioned_data[callback_data.index].mark == Emoji.OK:
+        markup.partitioned_data[callback_data.index].mark = Emoji.DENIAL
     else:
-        markup.data[callback_data.index].mark = Emoji.OK
+        markup.partitioned_data[callback_data.index].mark = Emoji.OK
 
-    await bot_control.set_last(await markup.update())
+    await bot_control.set_current(await markup.update())
 
 
 @party_router.callback_query(F.data == "accept_edit_english_run")
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
-    markup = bot_control.last
+    markup = bot_control.current
     await delete_words((word.only_text for word in markup.data if word.mark == Emoji.DENIAL))
     await bot_control.pop_last()
 
 
 @party_router.callback_query(F.data == "accept_offer")
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
-    markup = bot_control.last
+    markup = bot_control.current
     await insert_new_words((word.only_text for word in markup.data if word.mark == Emoji.OK))
     await bot_control.pop_last()
     Offer().destroy()

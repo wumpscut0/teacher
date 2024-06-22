@@ -1,3 +1,5 @@
+import asyncio
+import string
 from asyncio import gather, create_task
 import json
 from os import getenv
@@ -18,7 +20,7 @@ class WordData:
 
     @property
     def _translations(self):
-        return [tr for pos_value in self.data["pos"].values() for tr in pos_value["tr"]]
+        return [tr for pos_value in self.data["pos"].values() for tr in pos_value.get("tr", [])]
 
     @property
     def _examples(self) -> List[Dict[str, str]]:
@@ -29,8 +31,11 @@ class WordData:
                 examples_.extend(examples)
         return examples_
 
-    def get_random_example(self):
-        example = choice(self._examples)
+    def get_random_example(self) -> Dict | None:
+        examples = self._examples
+        if not examples:
+            return
+        example = choice(examples)
         if randint(0, 1):
             return {
                 "original": example["original"],
@@ -66,17 +71,23 @@ class SuperEnglishDictionary:
     _word_data_cache = WordDataCache()
 
     @classmethod
-    async def extract_data(cls, word: str) -> WordData:
+    async def extract_data(cls, word: str, cache=True) -> WordData:
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect word {word} for extract data")
 
-        data = cls._word_data_cache[word]
-        if data is not None:
-            return data
+        if cache:
+            data = cls._word_data_cache[word]
+            if data is not None:
+                return WordData(word, data)
 
         data, audio_and_examples = await gather(cls._yandex(word), cls._audio_and_examples(word))
         for pos, examples in audio_and_examples["examples"].items():
-            data["pos"][pos]["examples"] = examples
+            if examples:
+                try:
+                    data["pos"][pos]["examples"] = examples
+                except KeyError:
+                    data["pos"][pos] = {}
+                    data["pos"][pos]["examples"] = examples
         data["audio"] = audio_and_examples["audio"]
 
         cls._word_data_cache[word] = data
@@ -84,7 +95,7 @@ class SuperEnglishDictionary:
 
     @classmethod
     async def _translate(cls, text: str):
-        if not fullmatch(r"""[a-z-,?.!:";' ]+""", text, flags=I):
+        if not fullmatch(r"""[a-z-,?.!:$%#*()&№`~";'0-9 ]+""", text, flags=I):
             raise ValueError(f"Incorrect text {text} to translate")
 
         body = {
@@ -170,9 +181,9 @@ class SuperEnglishDictionary:
                     data = await response_.json()
                     try:
                         return cls._yandex_parsing(data)
-                    except KeyError:
+                    except KeyError as e:
                         raise KeyError(
-                            f"Yandex dict API {cls._yandex_host} returned unexpected data {data} Status {status}"
+                            f"Yandex dict API {cls._yandex_host} returned unexpected data {data} Status {status} {e}"
                         )
                 else:
                     errors.error(f"Yandex dict API returned unexpected code {status}")
@@ -181,24 +192,33 @@ class SuperEnglishDictionary:
     def _yandex_parsing(cls, data: Dict):
         resume = {
             "pos": {
-
             }
         }
         for pos in data["def"]:
             ts = pos.get("ts")
             if ts:
                 resume["ts"] = ts
-            resume["pos"][pos["pos"]] = {
+            resume["pos"][pos.get("pos", "other")] = {
                 "tr": [],
                 "syn": [],
             }
-            for tr in pos["tr"]:
-                resume["pos"][pos["pos"]]["tr"].append(tr["text"])
-                resume["pos"][pos["pos"]]["syn"].extend((mean["text"] for mean in tr.get("mean", ())))
+            for tr in pos.get("tr", []):
+                t = tr.get("text")
+                if t and all(True if sym not in string.ascii_letters else False for sym in t):
+                    resume["pos"][pos.get("pos", "other")]["tr"].append(t)
+                s = tr.get("mean", ())
+                if s:
+                    resume["pos"][pos.get("pos", "other")]["syn"].extend((mean["text"] for mean in s))
+        empty_keys = []
+        for pos in resume["pos"]:
+            if all((not i for i in resume["pos"][pos].values())):
+                empty_keys.append(pos)
+        for k in empty_keys:
+            resume["pos"].pop(k)
         return resume
 
 
-# w = "span"
-# e = asyncio.run(SuperEnglishDictionary.extract_data(w))
-# with open("e.json", "w", encoding="utf-8") as file:
-#     json.dump(e, file, indent=4, ensure_ascii=False)
+w = "introduce"
+e = asyncio.run(SuperEnglishDictionary.extract_data(w, cache=False))
+with open("e.json", "w", encoding="utf-8") as file:
+    json.dump(e.data, file, indent=4, ensure_ascii=False)

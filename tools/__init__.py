@@ -2,7 +2,7 @@ from base64 import b64decode, b64encode
 from os import getenv
 from math import ceil
 from pickle import dumps, loads
-from typing import Union, Any, List, Dict, Hashable, Set
+from typing import Union, Any, List, Dict, Hashable, Set, Iterable
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
@@ -115,6 +115,14 @@ class Emoji:
     HYGEUM = "⚕"
     WRITING_HAND = "✍"
     UNIVERSE = "🌌"
+    TALKING_HEAD = "🗣"
+    ABCD = "🔠"
+    CLIPS = "🖇️"
+    THOUGHT_BABBLE = "💬"
+    PLAY = "▶"
+    ALCHEMY = "⚗️"
+    VIOLET_ATOM = "⚛️"
+    SPIRAL = "🌀"
 
 
 def create_progress_text(
@@ -279,7 +287,7 @@ class ImmuneList(Storage):
         list_.append(item)
         self._list = list_
 
-    def extend(self, *items: Any):
+    def extend(self, items: Iterable):
         list_ = self._list
         list_.extend(items)
         self._list = list_
