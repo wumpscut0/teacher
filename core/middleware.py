@@ -4,25 +4,20 @@ from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from core import BotControl, _SetUpWindows
-from core.markups import WindowBuilder, Info
+from core import BotControl
+from core.markups import Info
 from core.loggers import errors
-from tools import Emoji
+from tools import Emoji, ImmuneDict
 
 
 class BuildBotControl(BaseMiddleware):
     def __init__(
             self,
             bot: Bot,
-            private_title_screen: WindowBuilder,
-            group_title_screen: WindowBuilder,
-            hello_screen: WindowBuilder,
+            set_up_windows: ImmuneDict
     ):
         self._bot = bot
-        self._set_up_windows = _SetUpWindows(self._bot.id)
-        self._set_up_windows["private_title_screen"] = private_title_screen
-        self._set_up_windows["group_title_screen"] = group_title_screen
-        self._set_up_windows["greetings"] = hello_screen
+        self._set_up_windows = set_up_windows
 
     async def __call__(
             self,
@@ -36,9 +31,7 @@ class BuildBotControl(BaseMiddleware):
             return await handler(event, data)
         except (ValueError, BaseException) as e:
             errors.critical(f"An error occurred when execution some handler", exc_info=True)
-            await bot_control.extend(
-                await Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry").update(),
-            )
+            await bot_control.append(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
             raise e
 
     async def _build_bot_control(self, event, state: FSMContext):

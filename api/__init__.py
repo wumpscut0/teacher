@@ -12,7 +12,14 @@ from cache import WordDataCache
 from core.loggers import info, errors
 
 
-class WordData:
+class WordCardSide:
+    def __init__(self, question: str | list, answer: str | list, type_: str):
+        self.question = question
+        self.answer = answer,
+        self.type = type_
+
+
+class WordCard:
     def __init__(self, word: str, data: Dict):
         super().__init__()
         self.data = data
@@ -31,31 +38,27 @@ class WordData:
                 examples_.extend(examples)
         return examples_
 
-    def get_random_example(self) -> Dict | None:
+    def _get_random_example(self):
         examples = self._examples
         if not examples:
             return
         example = choice(examples)
         if randint(0, 1):
-            return {
-                "original": example["original"],
-                "translate": example["translate"]
-            }
-        return {
-            "original": example["translate"],
-            "translate": example["original"]
-        }
+            return WordCardSide(example["original"], example["translate"], "example:en-ru")
+        return WordCardSide(example["translate"], example["original"], "example:ru-en")
 
-    def get_random_default(self):
+    def get_random_side(self) -> WordCardSide:
         if randint(0, 1):
-            return {
-                "original": self.word,
-                "translate": self._translations
-            }
-        return {
-            "original": self._translations,
-            "translate": self.word
-        }
+            card = self._get_random_example()
+            if card is None:
+                return self._get_random_default()
+            return card
+        return self._get_random_default()
+
+    def _get_random_default(self) -> WordCardSide:
+        if randint(0, 1):
+            return WordCardSide(self.word, self._translations, "default:en-ru")
+        return WordCardSide(self._translations, self.word, "default:ru-en")
 
 
 class SuperEnglishDictionary:
@@ -71,14 +74,14 @@ class SuperEnglishDictionary:
     _word_data_cache = WordDataCache()
 
     @classmethod
-    async def extract_data(cls, word: str, cache=True) -> WordData:
+    async def extract_data(cls, word: str, cache=True) -> WordCard:
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect word {word} for extract data")
 
         if cache:
             data = cls._word_data_cache[word]
             if data is not None:
-                return WordData(word, data)
+                return WordCard(word, data)
 
         data, audio_and_examples = await gather(cls._yandex(word), cls._audio_and_examples(word))
         for pos, examples in audio_and_examples["examples"].items():
@@ -91,7 +94,7 @@ class SuperEnglishDictionary:
         data["audio"] = audio_and_examples["audio"]
 
         cls._word_data_cache[word] = data
-        return WordData(word, data)
+        return WordCard(word, data)
 
     @classmethod
     async def _translate(cls, text: str):

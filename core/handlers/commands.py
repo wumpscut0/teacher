@@ -1,7 +1,7 @@
 from aiogram.types import Message
 
 from core import BotControl, Routers
-from core.objects import _BotCommands
+from core import _BotCommands
 
 default_commands_router = Routers.private()
 group_commands = Routers.group()

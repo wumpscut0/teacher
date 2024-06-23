@@ -1,16 +1,15 @@
 import os
 import string
-from random import randint, choice
-from re import fullmatch, I
+from random import choice
 
 import Levenshtein
 from collections import defaultdict
-from typing import List
+from typing import List, Literal
 
 from aiogram.types import FSInputFile
 
 from FSM import States
-from api import WordData
+from api import WordCard, WordCardSide
 from core import ButtonWidget, WindowBuilder
 from core.markups import DataTextWidget, TextWidget
 from tools import Emoji, create_progress_text
@@ -27,7 +26,7 @@ class Greetings(WindowBuilder):
 
 class PrivateTuurngaidTitleScreen(WindowBuilder):
     def __init__(self):
-        super().__init__(type_="photo", burying=False)
+        super().__init__(type_="photo", backable=False)
         self.photo = FSInputFile(os.path.join(os.path.dirname(__file__), "../images/lV7-nxj4P_o.jpg"))
         self.keyboard_map = [
             [
@@ -44,8 +43,6 @@ class SuggestWord(WindowBuilder):
             back_text=Emoji.BACK
         )
         self.prompt = "Suggest a ENGLISH word to Tuurngait that goes in the English Run."
-
-    async def update(self, *args, **kwargs):
         self.add_texts_rows(
             TextWidget(text=self.prompt)
         )
@@ -54,13 +51,11 @@ class SuggestWord(WindowBuilder):
 class English(WindowBuilder):
     _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
 
-    def __init__(self, deck: List[WordData]):
+    def __init__(self, deck: List[WordCard]):
         super().__init__(state=States.input_text_word_translate)
         self._deck = deck
-        self.current_card = None
-        self.current_question = None
-        self.current_answer = None
-        self.card_is_default = None
+        self.current_card: WordCard | None = None
+        self.current_side: WordCardSide | None = None
         self.deck_size = len(deck)
         self._rewards = defaultdict(int)
         self.dna = 0
@@ -68,55 +63,44 @@ class English(WindowBuilder):
         self.score = 0
         self.back.text = f"Cancel run {Emoji.DENIAL}"
         self.question_widget = None
+        self.grade: Literal["p", "g", "b"]
+        self._calculators = {
+            "default:en-ru": self._calc_default_en_ru,
+            "default:ru-en": self._calc_default_ru_en,
+            "example:ru-en": self._calc_example,
+            "example:en-ru": self._calc_example
+        }
+        translate_question_widget = DataTextWidget(text=f"\n{Emoji.ALCHEMY} Translate", data=self.current_side.question)
+        self.question_widgets = {
+            "default:en-ru": DataTextWidget(
+                text=f"\n{Emoji.ALCHEMY} Give all possible translations, comma-separated, of the word",
+                data=self.current_side.question
+            ),
+            "default:ru-en": DataTextWidget(
+                text=f"\n{Emoji.ALCHEMY} What English word can describe each of these words?",
+                data='\n'.join(self.current_side.question), sep="\n"
+            ),
+            "example:ru-en": translate_question_widget,
+            "example:en-ru": translate_question_widget
+        }
 
-    @property
-    def answer_as_text(self):
-        if self.card_is_default and fullmatch(f"[а-я-, ]+", "".join(self.current_answer), flags=I):
-            return ", ".join(self.current_answer)
-        return self.current_answer
-
-    async def update(self, answer: str):
+    def process_answer(self, answer: str):
         self.state = None
         self._open_card()
         self.add_texts_rows(
             self.question_widget,
             DataTextWidget(text=f"\n{Emoji.VIOLET_ATOM} Your answer", data=answer),
-            DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data=self.answer_as_text + "\n")
         )
-
-        progress, user_correct_answers = self._levenshtein_distance(answer)
-        self.possible_dna += len(progress)
-        dna_count = progress.count(Emoji.DNA)
-        self.dna += dna_count
-        if Emoji.FLASK not in progress:
+        if self.current_side.type == "example:en-ru":
             self.add_texts_rows(
-                TextWidget(text=f"{Emoji.UNIVERSE} Perfectly! + {Emoji.DNA}x{len(progress)}")
+                DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data="\n".join(self.current_side.answer) + "\n", sep="\n")
             )
-            self.score += 1
-        elif not self.card_is_default:
-            if dna_count >= len(progress) // 2:
-                self.add_texts_rows(
-                    TextWidget(text=f"{Emoji.BRAIN} Good"),
-                    TextWidget(text=progress)
-                )
-                self.score += 1
-            else:
-                self.add_texts_rows(
-                    TextWidget(text=progress),
-                    TextWidget(text=f"{Emoji.BROKEN_ROSE} You can do better"),
-                )
         else:
-            if user_correct_answers:
-                self.add_texts_rows(
-                    TextWidget(text=f"{Emoji.BRAIN} Good"),
-                    TextWidget(text=progress)
-                )
-                self.score += 1
-            else:
-                self.add_texts_rows(
-                    TextWidget(text=progress),
-                    TextWidget(text=f"{Emoji.BROKEN_ROSE} You can do better"),
-                )
+            self.add_texts_rows(
+                DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data=self.current_side.answer + "\n")
+            )
+
+        self._calculators[self.current_side.type](answer)
 
         # for threshold in range(5, self._possible_scores, 5):
         #     if threshold == self.score and not self._rewards[threshold] and os.path.exists(
@@ -128,74 +112,97 @@ class English(WindowBuilder):
         # else:
         #     self.type = "text"
 
-    def _levenshtein_distance(self, answer: str):
-        if self.card_is_default:
-            if isinstance(self.current_answer, list):
-                correct_answers = list(map(lambda x: x.strip().lower(), self.current_answer))
-                user_answers = set(map(lambda x: x.strip().lower().strip().translate(self._cleaner), answer.split(",")))
-                distances = []
-                user_correct_answers = []
-                q_c = []
-                for user_answer in user_answers:
-                    comparison = []
-                    for correct_answer in correct_answers:
-                        comparison.append((Levenshtein.distance(user_answer, correct_answer), correct_answer))
-                    d, q = min(comparison, key=lambda x: x[0])
-                    q_c.append(q)
-                    if not d:
-                        user_correct_answers.append(user_answer)
-                    distances.append(d)
+    def _calc_default_en_ru(self, answer: str):
+        correct_answers = list(map(lambda x: x.strip().lower(), self.current_side.answer))
+        user_answers = set(map(lambda x: x.strip().lower().strip().translate(self._cleaner), answer.split(",")))
 
-                if len(user_answers) > len(correct_answers):
-                    for _ in range(len(user_answers) - len(correct_answers)):
-                        distances.remove(max(distances))
+        user_correct_answers = [user_answer for user_answer in user_answers if user_answer in correct_answers]
 
-                progress = create_progress_text(
-                    numerator=sum(distances),
-                    denominator=len("".join(q_c)),
-                    length_widget=len("".join(q_c)),
-                    show_digits=False,
-                    progress_element=Emoji.FLASK, remaining_element=Emoji.DNA
-                )
-                return progress[::-1], user_correct_answers
-            else:
-                correct_answers = [self.current_answer.lower()]
-                user_answers = [answer.lower().strip().translate(self._cleaner)]
-        else:
-            correct_answers = [" ".join(map(lambda x: x.strip(), self.current_answer.translate(self._cleaner).lower().split()))]
-            user_answers = [" ".join(map(lambda x: x.strip(), answer.translate(self._cleaner).lower().split()))]
-
-        distances = []
-        user_correct_answers = []
-        for user_answer in user_answers:
-            comparison = []
-            for correct_answer in correct_answers:
-                comparison.append(Levenshtein.distance(user_answer, correct_answer))
-            d = min(comparison)
-            if not d:
-                user_correct_answers.append(user_answer)
-            distances.append(d)
-
-        if len(user_answers) > len(correct_answers):
-            for _ in range(len(user_answers) - len(correct_answers)):
-                distances.remove(max(distances))
-
-        # if len(correct_answers) > 1:
-        # progress = create_progress_text(
-        #     numerator=round(sum(distances) / len(distances)),
-        #     denominator=round(sum((len(answer) for answer in correct_answers)) / len(correct_answers)),
-        #     length_widget=len(max(correct_answers, key=len)),
-        #     show_digits=False,
-        #     progress_element=Emoji.FLASK, remaining_element=Emoji.DNA
-        # )
         progress = create_progress_text(
-            numerator=sum(distances),
-            denominator=len("".join(correct_answers)),
-            length_widget=len("".join(correct_answers)),
+            numerator=len(user_correct_answers),
+            denominator=len(correct_answers),
+            length_widget=len(correct_answers),
+            show_digits=False,
+            progress_element=Emoji.DNA, remaining_element=Emoji.FLASK
+        )
+        self.possible_dna += len(progress)
+        dna_count = progress.count(Emoji.DNA)
+        self.dna += dna_count
+        if len(user_correct_answers) >= len(correct_answers) // 2:
+            self._perfectly(progress)
+        elif len(user_correct_answers) > 0:
+            self._good(progress)
+        else:
+            self._bad(progress)
+
+    def _calc_example(self, answer: str):
+        correct_answer = " ".join(map(lambda x: x.strip(), self.current_side.answer.translate(self._cleaner).lower().split()))
+        user_answer = " ".join(map(lambda x: x.strip(), answer.translate(self._cleaner).lower().split()))
+        distance = Levenshtein.distance(user_answer, correct_answer)
+        progress = create_progress_text(
+            numerator=distance,
+            denominator=len(correct_answer),
+            length_widget=len(correct_answer.split()),
             show_digits=False,
             progress_element=Emoji.FLASK, remaining_element=Emoji.DNA
+        )[::-1]
+
+        if not distance:
+            assert Emoji.FLASK not in progress
+            self._perfectly(progress)
+        elif progress.count(Emoji.DNA) >= len(progress) // 2:
+            self._good(progress)
+        else:
+            self._bad(progress)
+
+    def _calc_default_ru_en(self, answer: str):
+        correct_answer = self.current_side.answer.lower()
+        user_answer = answer.lower().strip().translate(self._cleaner)
+        distance = Levenshtein.distance(user_answer, correct_answer)
+        progress = create_progress_text(
+            numerator=distance,
+            denominator=len(correct_answer),
+            length_widget=len(correct_answer),
+            show_digits=False,
+            progress_element=Emoji.FLASK, remaining_element=Emoji.DNA
+        )[::-1]
+        if not distance:
+            assert Emoji.FLASK not in progress
+            self._perfectly(progress)
+        elif distance < 3:
+            self._good(progress)
+        else:
+            self._bad(progress)
+
+    def _calculate_dna(self, progress: str):
+        self.possible_dna += len(progress)
+        dna_count = progress.count(Emoji.DNA)
+        self.dna += dna_count
+
+    def _perfectly(self, progress: str):
+        self._calculate_dna(progress)
+        self.add_texts_rows(
+            TextWidget(text=f"{Emoji.UNIVERSE} Perfectly! + {Emoji.DNA}x{len(progress)}")
         )
-        return progress[::-1], user_correct_answers
+        self.score += 1
+        self.grade = "p"
+
+    def _good(self, progress):
+        self._calculate_dna(progress)
+        self.add_texts_rows(
+            TextWidget(text=f"{Emoji.BRAIN} Good"),
+            TextWidget(text=progress)
+        )
+        self.score += 1
+        self.grade = "g"
+
+    def _bad(self, progress: str):
+        self._calculate_dna(progress)
+        self.add_texts_rows(
+            TextWidget(text=progress),
+            TextWidget(text=f"{Emoji.BROKEN_ROSE} You can do better"),
+        )
+        self.grade = "b"
 
     def _open_card(self):
         data = self.current_card.data
@@ -207,7 +214,7 @@ class English(WindowBuilder):
             self.type = "text"
 
         self.add_texts_rows(
-            DataTextWidget(text=f"{Emoji.ALCHEMY} Word", data=self.current_card.word),
+            DataTextWidget(text=f"{Emoji.PUZZLE} Word", data=self.current_card.word),
             DataTextWidget(text=f"{Emoji.TALKING_HEAD} Transcription", data=data["ts"])
         )
 
@@ -218,42 +225,11 @@ class English(WindowBuilder):
 
     def draw_card(self):
         self.type = "text"
-        self.current_card = self._deck.pop()
-        if randint(0, 1):
-            card = self.current_card.get_random_default()
-            self.card_is_default = True
-        else:
-            card = self.current_card.get_random_example()
-            self.card_is_default = False
-            if card is None:
-                card = self.current_card.get_random_default()
-                self.card_is_default = True
-        self.current_question = card["original"]
-        self.current_answer = card["translate"]
-        self._ask_question()
-
-    def _ask_question(self):
         self.state = States.input_text_word_translate
-        if self.card_is_default and fullmatch(f"[а-я-, ]+", "".join(self.current_question), flags=I):
-            q = DataTextWidget(text=f"\n{Emoji.ALCHEMY} What English word can describe each of these words?",
-                           data='\n'.join(self.current_question), sep="\n")
-            self.question_widget = q
-            self.add_texts_rows(
-                q
-            )
-
-        elif self.card_is_default:
-            q = DataTextWidget(text=f"\n{Emoji.ALCHEMY} Give all possible translations, comma-separated, of the word", data=self.current_question)
-            self.question_widget = q
-            self.add_texts_rows(
-                q
-            )
-        else:
-            q = DataTextWidget(text=f"\n{Emoji.ALCHEMY} Translate", data=self.current_question)
-            self.question_widget = q
-            self.add_texts_rows(
-                q
-            )
+        card = self._deck.pop()
+        self.current_card = card
+        self.current_side = card.get_random_side()
+        self.add_texts_rows(self.question_widgets[self.current_side.type])
 
     def reference(self):
         self.back.text = Emoji.BACK

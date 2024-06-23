@@ -123,6 +123,7 @@ class Emoji:
     ALCHEMY = "⚗️"
     VIOLET_ATOM = "⚛️"
     SPIRAL = "🌀"
+    PUZZLE = "🧩"
 
 
 def create_progress_text(
@@ -236,8 +237,8 @@ class Storage:
 
 
 class ImmuneDict(Storage):
-    def __init__(self, dict_name: str = "common_dict"):
-        super().__init__(dict_name)
+    def __init__(self, id_: str | int = "common_dict"):
+        super().__init__(id_)
 
     @property
     def dict(self) -> Dict[Hashable, Any]:
@@ -260,65 +261,62 @@ class ImmuneDict(Storage):
 
 
 class ImmuneList(Storage):
-    def __init__(self, list_name: str = "common_list"):
-        super().__init__(list_name)
+    def __init__(self, id_: str | int = "common_list"):
+        super().__init__(id_)
 
     @property
-    def _list(self) -> List[Any]:
+    def list(self) -> List[Any]:
         return self._get(self._id_, [])
 
     def __getitem__(self, index: int):
-        try:
-            return self._list[index]
-        except IndexError:
-            return
+        return self.list[index]
 
-    @_list.setter
-    def _list(self, list_: List[Any]):
+    @list.setter
+    def list(self, list_: List[Any]):
         self._set(self._id_, list_)
 
     def __setitem__(self, index: int, value: Any):
-        list_ = self._list
+        list_ = self.list
         list_[index] = value
-        self._list = list_
+        self.list = list_
 
     def append(self, item: Any):
-        list_ = self._list
+        list_ = self.list
         list_.append(item)
-        self._list = list_
+        self.list = list_
 
     def extend(self, items: Iterable):
-        list_ = self._list
+        list_ = self.list
         list_.extend(items)
-        self._list = list_
+        self.list = list_
 
     def pop_last(self):
-        list_ = self._list
+        list_ = self.list
         if not list_:
             return
         item = list_.pop()
-        self._list = list_
+        self.list = list_
         return item
 
     def reset(self, item: Any):
-        self._list = [item]
+        self.list = [item]
 
     def remove(self, message_id: int):
-        list_ = self._list
+        list_ = self.list
         try:
             list_.remove(message_id)
-            self._list = list_
+            self.list = list_
             return True
         except ValueError:
             return False
 
     def destroy(self):
-        self._list = None
+        self.list = None
 
 
 class ImmuneSet(Storage):
-    def __init__(self, set_name: str = "common_set"):
-        super().__init__(set_name)
+    def __init__(self, id_: str | int = "common_set"):
+        super().__init__(id_)
 
     @property
     def set(self) -> Set:

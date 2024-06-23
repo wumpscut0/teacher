@@ -4,12 +4,13 @@ from typing import List
 from aiogram import Dispatcher, Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, Redis
+from aiogram.types import BotCommand
 
-from core import WindowBuilder, SCHEDULER
+from core import WindowBuilder, SCHEDULER, _BotCommands
 from core.handlers.abyss import abyss_router
 from core.handlers.commands import default_commands_router, group_commands
 from core.middleware import BuildBotControl
-from core.objects import BotCommand, _BotCommands
+from tools import ImmuneDict
 
 
 class BuildBot:
@@ -28,11 +29,13 @@ class BuildBot:
             hello_screen: WindowBuilder,
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
+        set_up_windows = ImmuneDict(self.bot.id)
+        set_up_windows["private_title_screen"] = private_title_screen
+        set_up_windows["group_title_screen"] = group_title_screen
+        set_up_windows["greetings"] = hello_screen
         self.dispatcher.update.middleware(BuildBotControl(
             self.bot,
-            private_title_screen,
-            group_title_screen,
-            hello_screen,
+            set_up_windows
         ))
         self.dispatcher.include_routers(default_commands_router, group_commands, *routers, abyss_router)
         SCHEDULER.start()

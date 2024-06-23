@@ -26,7 +26,7 @@ class BotCommands:
 @commands_router.message(BotCommands.offer_word)
 async def offer_word(message: Message, bot_control: BotControl):
     await message.delete()
-    await bot_control.append(await SuggestWord().update())
+    await bot_control.append(SuggestWord())
 
 
 @commands_router.message(StateFilter(States.input_text_suggest_word), F.text)
@@ -42,4 +42,4 @@ async def offer_word(message: Message, bot_control: BotControl):
 
     Offer().append(word)
     suggest.prompt = f'"{word}" sent.\n\nSuggest another word'
-    await bot_control.set_current(await suggest.update())
+    await bot_control.set_current(suggest)
