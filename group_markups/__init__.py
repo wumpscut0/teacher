@@ -33,6 +33,7 @@ class WordTickCallbackData(CallbackData, prefix="word_tick"):
 class AcceptOffer(WindowBuilder):
     def __init__(self, data: List[str]):
         super().__init__(
+            frozen=True,
             data=[ButtonWidget(
                 mark=Emoji.OK,
                 text=word,
@@ -51,6 +52,7 @@ class AcceptOffer(WindowBuilder):
 class EditEnglishRun(WindowBuilder):
     def __init__(self, data: List[str]):
         super().__init__(
+            frozen=True,
             data=[ButtonWidget(
                 mark=Emoji.OK,
                 text=word,

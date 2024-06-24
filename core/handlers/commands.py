@@ -10,9 +10,14 @@ group_commands = Routers.group()
 @default_commands_router.message(_BotCommands.start)
 async def reset(message: Message, bot_control: BotControl):
     await message.delete()
-    if bot_control.user_id not in bot_control.user_uds.set:
+    try:
+        user_ids = bot_control.bot_storage["user_ids"]
+    except KeyError:
+        user_ids = []
+    if message.from_user.id not in user_ids:
         await bot_control.greetings()
-        bot_control.user_uds.add(bot_control.user_id)
+        user_ids.append(message.from_user.id)
+        bot_control.bot_storage["user_ids"] = user_ids
         return
     await bot_control.reset()
 

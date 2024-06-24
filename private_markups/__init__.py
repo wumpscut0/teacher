@@ -4,7 +4,7 @@ from random import choice
 
 import Levenshtein
 from collections import defaultdict
-from typing import List, Literal
+from typing import List, Dict
 
 from aiogram.types import FSInputFile
 
@@ -42,36 +42,52 @@ class SuggestWord(WindowBuilder):
             state=States.input_text_suggest_word,
             back_text=Emoji.BACK
         )
-        self.prompt = "Suggest a ENGLISH word to Tuurngait that goes in the English Run."
         self.add_texts_rows(
-            TextWidget(text=self.prompt)
+            TextWidget(text="Suggest a ENGLISH word to Tuurngait that goes in the English Run.")
+        )
+
+    def suggest_another_word_display(self, suggest: str):
+        self.add_texts_rows(
+            TextWidget(text=f'"{suggest}" sent.\n\nSuggest another word')
         )
 
 
 class English(WindowBuilder):
     _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
 
-    def __init__(self, deck: List[WordCard]):
-        super().__init__(state=States.input_text_word_translate)
+    def __init__(self, deck: List[WordCard], knowledge: Dict):
+        super().__init__(
+            state=States.input_text_word_translate,
+        )
         self._deck = deck
+        self.knowledge = knowledge
         self.current_card: WordCard | None = None
         self.current_side: WordCardSide | None = None
+        self.current_question_widget: DataTextWidget | None = None
         self.deck_size = len(deck)
         self._rewards = defaultdict(int)
         self.dna = 0
         self.possible_dna = 0
         self.score = 0
-        self.back.text = f"Cancel run {Emoji.DENIAL}"
-        self.question_widget = None
-        self.grade: Literal["p", "g", "b"]
+        self.possible_score = 0
+        self.back.text = f"Flush Run {Emoji.WAVE}"
+        self.back.callback_data = "result_english_run"
+
         self._calculators = {
             "default:en-ru": self._calc_default_en_ru,
             "default:ru-en": self._calc_default_ru_en,
             "example:ru-en": self._calc_example,
             "example:en-ru": self._calc_example
         }
+
+        self._grades_displaces = {
+            "p": self._perfectly,
+            "g": self._good,
+            "b": self._bad
+        }
+        self.draw_card()
         translate_question_widget = DataTextWidget(text=f"\n{Emoji.ALCHEMY} Translate", data=self.current_side.question)
-        self.question_widgets = {
+        self._questions_widgets = {
             "default:en-ru": DataTextWidget(
                 text=f"\n{Emoji.ALCHEMY} Give all possible translations, comma-separated, of the word",
                 data=self.current_side.question
@@ -83,24 +99,33 @@ class English(WindowBuilder):
             "example:ru-en": translate_question_widget,
             "example:en-ru": translate_question_widget
         }
+        self.ask_question()
 
     def process_answer(self, answer: str):
         self.state = None
+        grade, progress = self._calculators[self.current_side.type](answer)
+
+        self.knowledge[self.current_card.word][self.current_side.type][grade] += 1
+
+        self._info_display()
         self._open_card()
+        self._progress_display()
+
         self.add_texts_rows(
-            self.question_widget,
+            self.current_question_widget,
             DataTextWidget(text=f"\n{Emoji.VIOLET_ATOM} Your answer", data=answer),
         )
-        if self.current_side.type == "example:en-ru":
+
+        if self.current_side.type == "default:en-ru":
             self.add_texts_rows(
-                DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data="\n".join(self.current_side.answer) + "\n", sep="\n")
+                DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data="\n".join(self.current_side.answer) + "\n")
             )
         else:
             self.add_texts_rows(
                 DataTextWidget(text=f"{Emoji.SPIRAL} Right answer", data=self.current_side.answer + "\n")
             )
 
-        self._calculators[self.current_side.type](answer)
+        self._grades_displaces[grade](progress)
 
         # for threshold in range(5, self._possible_scores, 5):
         #     if threshold == self.score and not self._rewards[threshold] and os.path.exists(
@@ -111,6 +136,27 @@ class English(WindowBuilder):
         #         break
         # else:
         #     self.type = "text"
+
+    def _progress_display(self):
+        p = 0
+        g = 0
+        for type_grade, level in self.knowledge[self.current_card.word][self.current_side.type].items():
+            if type_grade.endswith("p") and level:
+                p += 1
+            elif type_grade.endswith("g") and level:
+                g += 1
+
+        knowledge = create_progress_text(
+            numerator=int(0.5 * g + p),
+            denominator=len(self._calculators),
+            progress_element=Emoji.SQUARE_ACADEMIC_CAP,
+            remaining_element=Emoji.BIOHAZARD
+        )
+        self.add_texts_rows(DataTextWidget(text=f"{Emoji.SQUARE_ACADEMIC_CAP} Knowledge level", data=knowledge))
+
+    def _info_display(self):
+        self.add_texts_rows(DataTextWidget(text=f"{Emoji.BOOKS_STACK} Stage", data=str(self.possible_score + 1)))
+        self.add_texts_rows(DataTextWidget(text=f"{Emoji.DNA}", data=str(self.dna) + "\n", sep=""))
 
     def _calc_default_en_ru(self, answer: str):
         correct_answers = list(map(lambda x: x.strip().lower(), self.current_side.answer))
@@ -126,19 +172,21 @@ class English(WindowBuilder):
             progress_element=Emoji.DNA, remaining_element=Emoji.FLASK
         )
         self.possible_dna += len(progress)
-        dna_count = progress.count(Emoji.DNA)
-        self.dna += dna_count
+        self.dna += progress.count(Emoji.DNA)
+        self.possible_score += 1
+
         if len(user_correct_answers) >= len(correct_answers) // 2:
-            self._perfectly(progress)
+            return "p", progress
         elif len(user_correct_answers) > 0:
-            self._good(progress)
+            return "g", progress
         else:
-            self._bad(progress)
+            return "b", progress
 
     def _calc_example(self, answer: str):
         correct_answer = " ".join(map(lambda x: x.strip(), self.current_side.answer.translate(self._cleaner).lower().split()))
         user_answer = " ".join(map(lambda x: x.strip(), answer.translate(self._cleaner).lower().split()))
         distance = Levenshtein.distance(user_answer, correct_answer)
+
         progress = create_progress_text(
             numerator=distance,
             denominator=len(correct_answer),
@@ -149,11 +197,11 @@ class English(WindowBuilder):
 
         if not distance:
             assert Emoji.FLASK not in progress
-            self._perfectly(progress)
+            return "p", progress
         elif progress.count(Emoji.DNA) >= len(progress) // 2:
-            self._good(progress)
+            return "g", progress
         else:
-            self._bad(progress)
+            return "b", progress
 
     def _calc_default_ru_en(self, answer: str):
         correct_answer = self.current_side.answer.lower()
@@ -168,11 +216,11 @@ class English(WindowBuilder):
         )[::-1]
         if not distance:
             assert Emoji.FLASK not in progress
-            self._perfectly(progress)
+            return "p", progress
         elif distance < 3:
-            self._good(progress)
+            return "g", progress
         else:
-            self._bad(progress)
+            return "b", progress
 
     def _calculate_dna(self, progress: str):
         self.possible_dna += len(progress)
@@ -185,7 +233,6 @@ class English(WindowBuilder):
             TextWidget(text=f"{Emoji.UNIVERSE} Perfectly! + {Emoji.DNA}x{len(progress)}")
         )
         self.score += 1
-        self.grade = "p"
 
     def _good(self, progress):
         self._calculate_dna(progress)
@@ -194,7 +241,6 @@ class English(WindowBuilder):
             TextWidget(text=progress)
         )
         self.score += 1
-        self.grade = "g"
 
     def _bad(self, progress: str):
         self._calculate_dna(progress)
@@ -202,12 +248,11 @@ class English(WindowBuilder):
             TextWidget(text=progress),
             TextWidget(text=f"{Emoji.BROKEN_ROSE} You can do better"),
         )
-        self.grade = "b"
 
     def _open_card(self):
         data = self.current_card.data
 
-        if data["audio"]:
+        if data.get("audio"):
             self.voice = choice(data["audio"])
             self.type = "voice"
         else:
@@ -215,7 +260,7 @@ class English(WindowBuilder):
 
         self.add_texts_rows(
             DataTextWidget(text=f"{Emoji.PUZZLE} Word", data=self.current_card.word),
-            DataTextWidget(text=f"{Emoji.TALKING_HEAD} Transcription", data=data["ts"])
+            DataTextWidget(text=f"{Emoji.TALKING_HEAD} Transcription", data=data["ts"] + "\n")
         )
 
         self.add_buttons_in_new_row(
@@ -229,10 +274,16 @@ class English(WindowBuilder):
         card = self._deck.pop()
         self.current_card = card
         self.current_side = card.get_random_side()
-        self.add_texts_rows(self.question_widgets[self.current_side.type])
+
+    def ask_question(self):
+        self._info_display()
+        question = self._questions_widgets[self.current_side.type]
+        self.current_question_widget = question
+        self.add_texts_rows(question)
 
     def reference(self):
         self.back.text = Emoji.BACK
+        self.back.callback_data = "back"
         self.type = "text"
         self.state = None
         for pos, value in self.current_card.data["pos"].items():
@@ -260,4 +311,5 @@ class English(WindowBuilder):
             DataTextWidget(text="Score", data=f"{self.score}/{self.deck_size}\n"),
             DataTextWidget(text=Emoji.DNA, data=f"{self.dna}/{self.possible_dna}")
         )
+        self.back.callback_data = "back"
         self.back.text = f"Ok"

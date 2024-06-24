@@ -29,13 +29,15 @@ class BuildBot:
             hello_screen: WindowBuilder,
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
+        bot_storage = ImmuneDict(f"{self.bot.id}:bot_storage")
         set_up_windows = ImmuneDict(self.bot.id)
         set_up_windows["private_title_screen"] = private_title_screen
         set_up_windows["group_title_screen"] = group_title_screen
         set_up_windows["greetings"] = hello_screen
         self.dispatcher.update.middleware(BuildBotControl(
             self.bot,
-            set_up_windows
+            set_up_windows,
+            bot_storage,
         ))
         self.dispatcher.include_routers(default_commands_router, group_commands, *routers, abyss_router)
         SCHEDULER.start()

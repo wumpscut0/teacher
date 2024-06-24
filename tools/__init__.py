@@ -2,7 +2,7 @@ from base64 import b64decode, b64encode
 from os import getenv
 from math import ceil
 from pickle import dumps, loads
-from typing import Union, Any, List, Dict, Hashable, Set, Iterable
+from typing import Union, Any, List, Set, Iterable
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
@@ -124,6 +124,10 @@ class Emoji:
     VIOLET_ATOM = "⚛️"
     SPIRAL = "🌀"
     PUZZLE = "🧩"
+    WAVE = "🌊"
+    BOOKS_STACK = "📚"
+    SQUARE_ACADEMIC_CAP = "🎓"
+    BIOHAZARD = "☣"
 
 
 def create_progress_text(
@@ -218,46 +222,36 @@ class Storage:
         host=getenv("REDIS_HOST"), port=int(getenv("REDIS_PORT")), db=1
     )
 
-    def __init__(self, id_: str = ""):
-        self._id_ = id_
+    def __init__(self, key: str = ""):
+        self._key = key
 
-    def _get(self, key: str, default: Any | None = None):
+    def _get(self, default: Any | None = None):
         try:
-            value = self.STORAGE.get(f"{key}:{self._id_}")
+            value = self.STORAGE.get(self._key)
         except (AttributeError, ModuleNotFoundError, Exception):
-            print(f"Impossible restore broken deserialized data\nKey: {key}")
-            self._set(key, default)
+            print(f"Impossible restore broken deserialized data\nKey: {self._key}")
+            self._set(default)
             return default
         if value is None:
             return default
         return value
 
-    def _set(self, key: str, value: Any):
-        self.STORAGE.set(f"{key}:{self._id_}", value)
+    def _set(self, value: Any):
+        self.STORAGE.set(self._key, value)
+
+    def destroy(self):
+        self.STORAGE.set(self._key, None)
 
 
 class ImmuneDict(Storage):
     def __init__(self, id_: str | int = "common_dict"):
         super().__init__(id_)
 
-    @property
-    def dict(self) -> Dict[Hashable, Any]:
-        return self._get(self._id_, {})
+    def __getitem__(self, key: str):
+        return self._get({})[key]
 
-    def __getitem__(self, item: Hashable):
-        return self.dict.get(item)
-
-    @dict.setter
-    def dict(self, dict_: Dict[Hashable, Any]):
-        self._set(self._id_, dict_)
-
-    def __setitem__(self, key: Hashable, value: Any):
-        dict_ = self.dict
-        dict_[key] = value
-        self.dict = dict_
-
-    def destroy(self):
-        self.dict = None
+    def __setitem__(self, key: str, value: Any):
+        self._set(value)
 
 
 class ImmuneList(Storage):
@@ -266,14 +260,14 @@ class ImmuneList(Storage):
 
     @property
     def list(self) -> List[Any]:
-        return self._get(self._id_, [])
+        return self._get([])
 
     def __getitem__(self, index: int):
         return self.list[index]
 
     @list.setter
     def list(self, list_: List[Any]):
-        self._set(self._id_, list_)
+        self._set(list_)
 
     def __setitem__(self, index: int, value: Any):
         list_ = self.list
@@ -320,7 +314,7 @@ class ImmuneSet(Storage):
 
     @property
     def set(self) -> Set:
-        return self._get(self._id_, set())
+        return self._get(set())
 
     def add(self, item: Any):
         set_ = self.set
@@ -329,7 +323,7 @@ class ImmuneSet(Storage):
 
     @set.setter
     def set(self, set_: Set):
-        self._set(self._id_, set_)
+        self._set(set_)
 
     def destroy(self):
         self.set = None

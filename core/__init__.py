@@ -14,7 +14,7 @@ from core.markups import WindowBuilder, WindowBuilder, ButtonWidget, TextWidget,
 
 from core.loggers import errors, info
 
-from tools import ImmuneList, ImmuneSet
+from tools import ImmuneList
 
 from aiogram.filters import Command
 from aiogram.types import BotCommand
@@ -92,15 +92,14 @@ class BotControl:
             chat_id: str,
             state: FSMContext,
             set_up_windows: ImmuneDict,
-            user_id: str | int | None = None,
+            bot_storage: ImmuneDict,
+            user_storage: ImmuneDict,
             name: str | None = None
     ):
         self.chat_id = chat_id
-        self.user_id = user_id
         self.name = name
-        self.user_uds = ImmuneSet(f"{bot.id}:user_ids")
-        self.user_storage = ImmuneDict(f"{bot.id}{user_id}:user_storage")
-        self.bot_storage = ImmuneDict(f"{bot.id}:bot_storage")
+        self.user_storage = user_storage
+        self.bot_storage = bot_storage
         self._chat_storage = ImmuneList(f"{chat_id}:{bot.id}:messages_ids")
         self._windows = ImmuneList(f"{chat_id}:{bot.id}:context_stack")
         self._set_up_windows = set_up_windows
@@ -113,7 +112,7 @@ class BotControl:
         }
 
     async def greetings(self):
-        await self.append(self._set_up_windows["greetings"]())
+        await self.append(self._set_up_windows["greetings"])
         await self.push()
 
     async def extend(self, *markups_: WindowBuilder):
@@ -152,12 +151,14 @@ class BotControl:
     @property
     def current(self):
         """
-        :return: last added window builder without text_map and keyboard_map
+        :return: if not frozen, return last added window builder without text_map and keyboard_map
         """
         try:
             markup = self._windows.list[-1]
         except IndexError:
             return
+        if markup.frozen:
+            return markup
         markup.reset()
         return markup
 
@@ -308,12 +309,13 @@ class BotControl:
 
         try:
             await self._update_message[markup.type](markup)
-        except (AttributeError, ValueError, ModuleNotFoundError, BaseException):
+        except (AttributeError, ValueError, ModuleNotFoundError, BaseException) as e:
             if self._set_up_windows["group_title_screen"].__class__.__name__ == markup.__class__.__name__ or self._set_up_windows["private_title_screen"].__class__.__name__ == markup.__class__.__name__:
                 errors.critical("Impossible restore context", exc_info=True)
                 raise ValueError("Impossible restore context")
             errors.error(f"broken contex", exc_info=True)
             await self.set_current(Info(f"Something broken {Emoji.BROKEN_HEARTH} Sorry"))
+            raise e
 
     async def clear_chat(self, force: bool = False):
         if force:

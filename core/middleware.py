@@ -14,9 +14,11 @@ class BuildBotControl(BaseMiddleware):
     def __init__(
             self,
             bot: Bot,
-            set_up_windows: ImmuneDict
+            set_up_windows: ImmuneDict,
+            bot_storage: ImmuneDict,
     ):
         self._bot = bot
+        self._bot_storage = bot_storage
         self._set_up_windows = set_up_windows
 
     async def __call__(
@@ -31,15 +33,17 @@ class BuildBotControl(BaseMiddleware):
             return await handler(event, data)
         except (ValueError, BaseException) as e:
             errors.critical(f"An error occurred when execution some handler", exc_info=True)
-            await bot_control.append(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
+            await bot_control.set_current(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
             raise e
 
     async def _build_bot_control(self, event, state: FSMContext):
         bot_control = BotControl(
-            self._bot,
-            str(await self._extract_chat_id(event)),
-            state,
-            self._set_up_windows,
+            bot=self._bot,
+            chat_id=str(await self._extract_chat_id(event)),
+            state=state,
+            set_up_windows=self._set_up_windows,
+            bot_storage=self._bot_storage,
+            user_storage=ImmuneDict(f"{await self._extract_user_id(event)}:user_storage"),
         )
         return bot_control
 

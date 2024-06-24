@@ -8,14 +8,14 @@ from re import fullmatch, I
 from typing import Dict, List
 
 from aiohttp import ClientSession
-from cache import WordDataCache
 from core.loggers import info, errors
+from tools import ImmuneDict
 
 
 class WordCardSide:
     def __init__(self, question: str | list, answer: str | list, type_: str):
         self.question = question
-        self.answer = answer,
+        self.answer = answer
         self.type = type_
 
 
@@ -26,11 +26,11 @@ class WordCard:
         self.word = word
 
     @property
-    def _translations(self):
+    def translations(self):
         return [tr for pos_value in self.data["pos"].values() for tr in pos_value.get("tr", [])]
 
     @property
-    def _examples(self) -> List[Dict[str, str]]:
+    def examples(self) -> List[Dict[str, str]]:
         examples_ = []
         for pos_value in self.data["pos"].values():
             examples = pos_value.get("examples")
@@ -39,7 +39,7 @@ class WordCard:
         return examples_
 
     def _get_random_example(self):
-        examples = self._examples
+        examples = self.examples
         if not examples:
             return
         example = choice(examples)
@@ -57,8 +57,8 @@ class WordCard:
 
     def _get_random_default(self) -> WordCardSide:
         if randint(0, 1):
-            return WordCardSide(self.word, self._translations, "default:en-ru")
-        return WordCardSide(self._translations, self.word, "default:ru-en")
+            return WordCardSide(self.word, self.translations, "default:en-ru")
+        return WordCardSide(self.translations, self.word, "default:ru-en")
 
 
 class SuperEnglishDictionary:
@@ -71,30 +71,37 @@ class SuperEnglishDictionary:
         "Content-Type": "application/json"
     }
 
-    _word_data_cache = WordDataCache()
+    _word_data_cache = ImmuneDict("english_words_data")
 
     @classmethod
-    async def extract_data(cls, word: str, cache=True) -> WordCard:
+    async def extract_data(cls, word: str, cache=True) -> WordCard | None:
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect word {word} for extract data")
 
         if cache:
-            data = cls._word_data_cache[word]
-            if data is not None:
-                return WordCard(word, data)
+            try:
+                return WordCard(word, cls._word_data_cache[word])
+            except KeyError:
+                pass
 
         data, audio_and_examples = await gather(cls._yandex(word), cls._audio_and_examples(word))
-        for pos, examples in audio_and_examples["examples"].items():
-            if examples:
-                try:
-                    data["pos"][pos]["examples"] = examples
-                except KeyError:
-                    data["pos"][pos] = {}
-                    data["pos"][pos]["examples"] = examples
-        data["audio"] = audio_and_examples["audio"]
+        if audio_and_examples is not None:
+            for pos, examples in audio_and_examples.get("examples", {}).items():
+                if examples:
+                    try:
+                        data["pos"][pos]["examples"] = examples
+                    except KeyError:
+                        data["pos"][pos] = {}
+                        data["pos"][pos]["examples"] = examples
+            data["audio"] = audio_and_examples.get("audio")
+
+        card = WordCard(word, data)
+
+        if not card.translations:
+            return None
 
         cls._word_data_cache[word] = data
-        return WordCard(word, data)
+        return card
 
     @classmethod
     async def _translate(cls, text: str):
@@ -221,7 +228,8 @@ class SuperEnglishDictionary:
         return resume
 
 
-w = "introduce"
-e = asyncio.run(SuperEnglishDictionary.extract_data(w, cache=False))
-with open("e.json", "w", encoding="utf-8") as file:
-    json.dump(e.data, file, indent=4, ensure_ascii=False)
+if __name__ == "__main__":
+    w = "introduce"
+    e = asyncio.run(SuperEnglishDictionary.extract_data(w, cache=False))
+    with open(f"{w}.json", "w", encoding="utf-8") as file:
+        json.dump(e.data, file, indent=4, ensure_ascii=False)

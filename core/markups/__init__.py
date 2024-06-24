@@ -185,6 +185,7 @@ class WindowBuilder(
             self,
             *,
             unique: bool = False,
+            frozen: bool = False,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
@@ -222,6 +223,7 @@ class WindowBuilder(
         """
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
+        self.frozen = frozen
         self.unique = unique
         self.back_inited = False
         self.inited_pagination = False
