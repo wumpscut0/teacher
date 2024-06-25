@@ -51,7 +51,6 @@ async def run_english(callback: CallbackQuery, bot_control: BotControl):
         knowledge = bot_control.user_storage["knowledge"]
     except KeyError:
         knowledge = defaultdict(default_type)
-
     english = English(cards, knowledge)
     await bot_control.append(
         english
@@ -69,8 +68,8 @@ async def accept_input_text_word_translate(message: Message, bot_control: BotCon
 
     english: English = bot_control.current
     english.process_answer(answer)
-    bot_control.user_storage["knowledge"] = english.knowledge
-
+    knowledge = english.knowledge
+    bot_control.user_storage["knowledge"] = knowledge
     await bot_control.set_current(english)
 
 

@@ -228,6 +228,7 @@ class Storage:
     def _get(self, default: Any | None = None):
         try:
             value = self.STORAGE.get(self._key)
+            print(f"GET key: {self._key} ; value: {value}")
         except (AttributeError, ModuleNotFoundError, Exception):
             print(f"Impossible restore broken deserialized data\nKey: {self._key}")
             self._set(default)
@@ -237,6 +238,7 @@ class Storage:
         return value
 
     def _set(self, value: Any):
+        # print(f"SET key: {self._key} ; value: {value}")
         self.STORAGE.set(self._key, value)
 
     def destroy(self):
@@ -248,10 +250,13 @@ class ImmuneDict(Storage):
         super().__init__(id_)
 
     def __getitem__(self, key: str):
-        return self._get({})[key]
+        item = self._get({})[key]
+        return item
 
     def __setitem__(self, key: str, value: Any):
-        self._set(value)
+        dict_ = self._get({})
+        dict_[key] = value
+        self._set(dict_)
 
 
 class ImmuneList(Storage):
@@ -304,9 +309,6 @@ class ImmuneList(Storage):
         except ValueError:
             return False
 
-    def destroy(self):
-        self.list = None
-
 
 class ImmuneSet(Storage):
     def __init__(self, id_: str | int = "common_set"):
@@ -324,6 +326,3 @@ class ImmuneSet(Storage):
     @set.setter
     def set(self, set_: Set):
         self._set(set_)
-
-    def destroy(self):
-        self.set = None

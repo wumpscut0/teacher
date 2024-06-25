@@ -50,12 +50,12 @@ class SuggestWord(WindowBuilder):
         self.add_texts_rows(
             TextWidget(text=f'"{suggest}" sent.\n\nSuggest another word')
         )
-
+"7316743261:user_storage" == ""
 
 class English(WindowBuilder):
     _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
 
-    def __init__(self, deck: List[WordCard], knowledge: Dict):
+    def __init__(self, deck: List[WordCard], knowledge: defaultdict):
         super().__init__(
             state=States.input_text_word_translate,
         )
@@ -104,7 +104,6 @@ class English(WindowBuilder):
     def process_answer(self, answer: str):
         self.state = None
         grade, progress = self._calculators[self.current_side.type](answer)
-
         self.knowledge[self.current_card.word][self.current_side.type][grade] += 1
 
         self._info_display()
@@ -140,10 +139,10 @@ class English(WindowBuilder):
     def _progress_display(self):
         p = 0
         g = 0
-        for type_grade, level in self.knowledge[self.current_card.word][self.current_side.type].items():
-            if type_grade.endswith("p") and level:
+        for type_question, grades in self.knowledge[self.current_card.word].items():
+            if grades.get("p"):
                 p += 1
-            elif type_grade.endswith("g") and level:
+            elif grades.get("g"):
                 g += 1
 
         knowledge = create_progress_text(

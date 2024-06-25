@@ -43,7 +43,7 @@ class BuildBotControl(BaseMiddleware):
             state=state,
             set_up_windows=self._set_up_windows,
             bot_storage=self._bot_storage,
-            user_storage=ImmuneDict(f"{await self._extract_user_id(event)}:user_storage"),
+            user_storage=ImmuneDict(f"{await self._extract_chat_id(event)}:user_storage"),
         )
         return bot_control
 
