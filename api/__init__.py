@@ -2,8 +2,9 @@ import asyncio
 import string
 from asyncio import gather, create_task
 import json
+from copy import deepcopy
 from os import getenv
-from random import randint, choice
+from random import choice
 from re import fullmatch, I
 from typing import Dict, List
 
@@ -12,14 +13,32 @@ from core.loggers import info, errors
 from tools import ImmuneDict
 
 
-class WordCardSide:
-    def __init__(self, question: str | list, answer: str | list, type_: str):
+class WordCard:
+    def __init__(
+            self,
+            word: str,
+            data: Dict,
+            question: str | list,
+            answer: str | list,
+            type_: str,
+            knowledge_scheme: Dict,
+            question_text: str
+    ):
+        self.word = word
+        self.data = data
         self.question = question
         self.answer = answer
         self.type = type_
+        self._knowledge_scheme = knowledge_scheme
+        self.knowledge_border = len(self._knowledge_scheme)
+        self.question_text = question_text
+
+    @property
+    def knowledge_scheme(self):
+        return deepcopy(self._knowledge_scheme)
 
 
-class WordCard:
+class WordData:
     def __init__(self, word: str, data: Dict):
         super().__init__()
         self.data = data
@@ -28,6 +47,32 @@ class WordCard:
     @property
     def translations(self):
         return [tr for pos_value in self.data["pos"].values() for tr in pos_value.get("tr", [])]
+
+    def create_knowledge(self):
+        knowledge = {}
+        if self.examples:
+            knowledge["example:en-ru"] = {
+                "p": 0,
+                "g": 0,
+                "b": 0
+            }
+            knowledge["example:ru-en"] = {
+                "p": 0,
+                "g": 0,
+                "b": 0
+            }
+        if self.translations:
+            knowledge["default:en-ru"] = {
+                "p": 0,
+                "g": 0,
+                "b": 0
+            }
+            knowledge["default:ru-en"] = {
+                "p": 0,
+                "g": 0,
+                "b": 0
+            }
+        return knowledge
 
     @property
     def examples(self) -> List[Dict[str, str]]:
@@ -38,27 +83,43 @@ class WordCard:
                 examples_.extend(examples)
         return examples_
 
-    def _get_random_example(self):
-        examples = self.examples
-        if not examples:
-            return
-        example = choice(examples)
-        if randint(0, 1):
-            return WordCardSide(example["original"], example["translate"], "example:en-ru")
-        return WordCardSide(example["translate"], example["original"], "example:ru-en")
+    @property
+    def cards(self):
+        cards = []
+        knowledge_schema = self.create_knowledge()
+        trs = self.translations
+        if trs:
+            cards.append(WordCard(self.word, self.data, self.word, trs, "default:en-ru", knowledge_schema, f"Give all possible translations, comma-separated, of the word"))
+            cards.append(WordCard(self.word, self.data, trs, self.word, "default:ru-en", knowledge_schema, f"What English word can describe each of these words?"))
+        ex = self.examples
+        if ex:
+            ex = choice(ex)
+            cards.append(WordCard(self.word, self.data, ex["original"], ex["translate"], "example:en-ru", knowledge_schema, f"Translate"))
+            cards.append(WordCard(self.word, self.data, ex["translate"], ex["original"], "example:ru-en", knowledge_schema, f"Translate"))
 
-    def get_random_side(self) -> WordCardSide:
-        if randint(0, 1):
-            card = self._get_random_example()
-            if card is None:
-                return self._get_random_default()
-            return card
-        return self._get_random_default()
+        return cards
 
-    def _get_random_default(self) -> WordCardSide:
-        if randint(0, 1):
-            return WordCardSide(self.word, self.translations, "default:en-ru")
-        return WordCardSide(self.translations, self.word, "default:ru-en")
+    # def _get_random_example(self):
+    #     examples = self.examples
+    #     if not examples:
+    #         return
+    #     example = choice(examples)
+    #     if randint(0, 1):
+    #         return WordCard(example["original"], example["translate"], "example:en-ru")
+    #     return WordCard(example["translate"], example["original"], "example:ru-en")
+    #
+    # def get_random_side(self) -> WordCard:
+    #     if randint(0, 1):
+    #         card = self._get_random_example()
+    #         if card is None:
+    #             return self._get_random_default()
+    #         return card
+    #     return self._get_random_default()
+    #
+    # def _get_random_default(self) -> WordCard:
+    #     if randint(0, 1):
+    #         return WordCard(self.word, self.translations, "default:en-ru")
+    #     return WordCard(self.translations, self.word, "default:ru-en")
 
 
 class SuperEnglishDictionary:
@@ -72,15 +133,18 @@ class SuperEnglishDictionary:
     }
 
     _word_data_cache = ImmuneDict("english_words_data")
+    _translations_cache = ImmuneDict("deep-translate1.p.rapidapi.com")
+    _audio_and_examples_cache = ImmuneDict("api.dictionaryapi.dev")
+    _yandex_cache = ImmuneDict("dictionary.yandex.net")
 
     @classmethod
-    async def extract_data(cls, word: str, cache=True) -> WordCard | None:
+    async def extract_data(cls, word: str, cache=True) -> WordData | None:
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect word {word} for extract data")
 
         if cache:
             try:
-                return WordCard(word, cls._word_data_cache[word])
+                return WordData(word, cls._word_data_cache[word])
             except KeyError:
                 pass
 
@@ -95,16 +159,16 @@ class SuperEnglishDictionary:
                         data["pos"][pos]["examples"] = examples
             data["audio"] = audio_and_examples.get("audio")
 
-        card = WordCard(word, data)
+        word_data = WordData(word, data)
 
-        if not card.translations:
+        if not word_data.translations:
             return None
 
         cls._word_data_cache[word] = data
-        return card
+        return word_data
 
     @classmethod
-    async def _translate(cls, text: str):
+    async def _translate(cls, text: str, cache: bool = True):
         if not fullmatch(r"""[a-z-,?.!:$%#*()&№`~";'0-9 ]+""", text, flags=I):
             raise ValueError(f"Incorrect text {text} to translate")
 
@@ -113,6 +177,11 @@ class SuperEnglishDictionary:
             "target": "ru",
             "q": text
         }
+
+        if cache:
+            tr = cls._translations_cache.get(text)
+            if tr:
+                return tr
 
         async with ClientSession(cls._translate_host) as session:
             async with session.post(
@@ -124,7 +193,9 @@ class SuperEnglishDictionary:
                 if status == 200:
                     data = await response_.json()
                     try:
-                        return data["data"]["translations"]["translatedText"]
+                        tr = data["data"]["translations"]["translatedText"]
+                        cls._translations_cache[text] = tr
+                        return tr
                     except KeyError:
                         raise KeyError(f"Translate API {cls._translate_host} returned unexpected data {data}\n"
                                        f"Status {status}")
@@ -132,7 +203,12 @@ class SuperEnglishDictionary:
                     errors.error(f"Translate API returned unexpected code {status}")
 
     @classmethod
-    async def _audio_and_examples(cls, word: str):
+    async def _audio_and_examples(cls, word: str, cache: bool = True):
+        if cache:
+            data = cls._audio_and_examples_cache.get(word)
+            if data:
+                return data
+
         path = f"{cls._audio_and_examples_host}/api/v2/entries/en/{word}"
         async with ClientSession() as session:
             async with session.get(path) as response_:
@@ -140,6 +216,7 @@ class SuperEnglishDictionary:
                 if status == 200:
                     data = await response_.json()
                     try:
+                        cls._audio_and_examples_cache[word] = data
                         return await cls._audio_and_examples_parsing(data, word)
                     except KeyError:
                         info.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
@@ -178,7 +255,12 @@ class SuperEnglishDictionary:
         return resume
 
     @classmethod
-    async def _yandex(cls, word: str):
+    async def _yandex(cls, word: str, cache: bool = True):
+        if cache:
+            data = cls._yandex_cache.get(word)
+            if data:
+                return data
+
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect text {word} to yandex translate")
 
@@ -190,11 +272,13 @@ class SuperEnglishDictionary:
                 if status == 200:
                     data = await response_.json()
                     try:
+                        cls._yandex_cache[word] = data
                         return cls._yandex_parsing(data)
-                    except KeyError as e:
-                        raise KeyError(
+                    except KeyError as e_:
+                        e_.add_note(
                             f"Yandex dict API {cls._yandex_host} returned unexpected data {data} Status {status} {e}"
                         )
+                        raise e_
                 else:
                     errors.error(f"Yandex dict API returned unexpected code {status}")
 

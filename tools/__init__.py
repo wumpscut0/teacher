@@ -14,6 +14,7 @@ load_dotenv(find_dotenv())
 
 
 class Emoji:
+    STAR = "⭐"
     LAMP = "💡"
     OK = "✅"
     DENIAL = "❌"
@@ -128,6 +129,11 @@ class Emoji:
     BOOKS_STACK = "📚"
     SQUARE_ACADEMIC_CAP = "🎓"
     BIOHAZARD = "☣"
+    BIOHAZARD_2 = "☣️"
+    BIOHAZARD_3 = "☣"
+    SCALES = "⚖"
+    SCALES_2 = "⚖️"
+    DOWN_ARROW = "⬇"
 
 
 def create_progress_text(
@@ -144,7 +150,7 @@ def create_progress_text(
         progress = progress_element * length_widget
     else:
         float_fraction = numerator / denominator * length_widget
-        percent = ceil(float_fraction * 10)
+        percent = ceil(numerator / denominator * 100)
         fraction = ceil(float_fraction)
         grey_progress = (length_widget - fraction) * remaining_element
         green_progress = fraction * progress_element
@@ -250,13 +256,18 @@ class ImmuneDict(Storage):
         super().__init__(id_)
 
     def __getitem__(self, key: str):
-        item = self._get({})[key]
-        return item
+        return self._get({})[key]
 
     def __setitem__(self, key: str, value: Any):
         dict_ = self._get({})
         dict_[key] = value
         self._set(dict_)
+
+    def get(self, key: str, default: Any | None = None):
+        try:
+            return self._get({})[key]
+        except KeyError:
+            return default
 
 
 class ImmuneList(Storage):

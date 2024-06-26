@@ -43,7 +43,7 @@ class BuildBotControl(BaseMiddleware):
             state=state,
             set_up_windows=self._set_up_windows,
             bot_storage=self._bot_storage,
-            user_storage=ImmuneDict(f"{await self._extract_chat_id(event)}:user_storage"),
+            user_storage=ImmuneDict(f"{await self._extract_user_id(event)}:user_storage"),
         )
         return bot_control
 
@@ -60,7 +60,7 @@ class BuildBotControl(BaseMiddleware):
         try:
             user_id = event.message.from_user.id
         except AttributeError:
-            user_id = event.callback_query.message.from_user.id
+            user_id = event.callback_query.from_user.id
         return user_id
 
     @classmethod

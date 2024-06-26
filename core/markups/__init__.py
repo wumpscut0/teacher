@@ -226,7 +226,8 @@ class WindowBuilder(
         self.frozen = frozen
         self.unique = unique
         self.back_inited = False
-        self.inited_pagination = False
+        self.pagination_inited = False
+        self.extra_inited = False
         self.data = [] if data is None else data
         self._size_page = size_page
         self.buttons_per_line = buttons_per_line
@@ -254,7 +255,7 @@ class WindowBuilder(
     def init_pagination(self):
         if len(self._partitioned_data) > 1:
             self.add_buttons_in_new_row(self.left, self.right)
-            self.inited_pagination = True
+            self.pagination_inited = True
 
     def init_control(self):
         if self.backable:
@@ -265,7 +266,7 @@ class WindowBuilder(
         self.text_map = []
         self.keyboard_map = [[]]
         self.back_inited = False
-        self.inited_pagination = False
+        self.pagination_inited = False
 
     @property
     def voice(self):

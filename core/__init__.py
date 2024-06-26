@@ -292,7 +292,7 @@ class BotControl:
         markup.keyboard_map = markup.split(markup.buttons_per_line, markup.partitioned_data)
         for row in custom_keyboard_map:
             markup.add_buttons_in_new_row(*row)
-        if not markup.inited_pagination:
+        if not markup.pagination_inited:
             markup.init_pagination()
         if not markup.back_inited:
             markup.init_control()

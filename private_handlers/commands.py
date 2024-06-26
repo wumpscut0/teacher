@@ -39,12 +39,9 @@ async def offer_word(message: Message, bot_control: BotControl):
         await bot_control.set_current(suggest)
         return
 
-    try:
-        offer = bot_control.bot_storage["offer"]
-    except KeyError:
-        offer = []
+    offer = bot_control.bot_storage.get("offer", set())
 
-    offer.append(word)
+    offer.add(word)
     bot_control.bot_storage["offer"] = offer
 
     suggest.suggest_another_word_display(word)

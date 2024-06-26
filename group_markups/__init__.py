@@ -31,7 +31,7 @@ class WordTickCallbackData(CallbackData, prefix="word_tick"):
 
 
 class AcceptOffer(WindowBuilder):
-    def __init__(self, data: List[str]):
+    def __init__(self, data: set[str]):
         super().__init__(
             frozen=True,
             data=[ButtonWidget(
@@ -50,7 +50,7 @@ class AcceptOffer(WindowBuilder):
 
 
 class EditEnglishRun(WindowBuilder):
-    def __init__(self, data: List[str]):
+    def __init__(self, data: set[str]):
         super().__init__(
             frozen=True,
             data=[ButtonWidget(
