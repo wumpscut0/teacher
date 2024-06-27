@@ -1,4 +1,4 @@
-import re
+from re import fullmatch
 import string
 
 from aiogram import F
@@ -6,10 +6,9 @@ from aiogram.filters import StateFilter, Command
 from aiogram.types import Message, BotCommand
 
 from FSM import States
-from config import WORD_LENGTH
 from core import Routers, BotControl
-from core.markups import TextWidget
-from private_markups import SuggestWord
+from core.markups import TextWidget, Info
+from private_markups import SuggestWords
 
 commands_router = Routers.private()
 
@@ -23,26 +22,25 @@ class BotCommands:
 
 
 @commands_router.message(BotCommands.offer_word)
-async def offer_word(message: Message, bot_control: BotControl):
+async def offer_words(message: Message, bot_control: BotControl):
     await message.delete()
-    await bot_control.append(SuggestWord())
+    await bot_control.append(SuggestWords())
 
 
 @commands_router.message(StateFilter(States.input_text_suggest_word), F.text)
-async def offer_word(message: Message, bot_control: BotControl):
-    word = message.text.translate(str.maketrans("", "", string.punctuation.replace("-", "") + "№\n "))
+async def accept_offer_words(message: Message, bot_control: BotControl):
+    words = message.text.translate(str.maketrans("", "", string.punctuation.replace("-", "") + "№\n")).split()
     await message.delete()
-
-    suggest: SuggestWord = bot_control.current
-    if len(word) > WORD_LENGTH or not re.fullmatch(r"[a-zA-Z-]+", word):
-        suggest.add_texts_rows(TextWidget(text="Incorrect input"))
-        await bot_control.set_current(suggest)
+    words = set(word for word in map(lambda word: word.strip(), words) if fullmatch(r"[a-zA-Z-]+", word))
+    if not words:
+        await bot_control.append(Info("Incorrect input"))
         return
 
-    offer = bot_control.bot_storage.get("offer", set())
+    offer = await bot_control.bot_storage.get_value_by_key("offer", set())
+    for word in words:
+        offer.add(word)
+    await bot_control.bot_storage.set_value_by_key("offer", offer)
 
-    offer.add(word)
-    bot_control.bot_storage["offer"] = offer
-
-    suggest.suggest_another_word_display(word)
+    suggest: SuggestWords = await bot_control.current()
+    suggest.suggest_another_word_display(", ".join(words))
     await bot_control.set_current(suggest)

@@ -6,20 +6,18 @@ from aiogram.types import Update
 
 from core import BotControl
 from core.markups import Info
-from core.loggers import errors
-from tools import Emoji, ImmuneDict
+from core.loggers import telegram_alt_errors
+from tools import Emoji, DictStorage
 
 
 class BuildBotControl(BaseMiddleware):
     def __init__(
             self,
             bot: Bot,
-            set_up_windows: ImmuneDict,
-            bot_storage: ImmuneDict,
+            bot_storage: DictStorage,
     ):
         self._bot = bot
         self._bot_storage = bot_storage
-        self._set_up_windows = set_up_windows
 
     async def __call__(
             self,
@@ -32,7 +30,7 @@ class BuildBotControl(BaseMiddleware):
         try:
             return await handler(event, data)
         except (ValueError, BaseException) as e:
-            errors.critical(f"An error occurred when execution some handler", exc_info=True)
+            telegram_alt_errors.critical(f"An error occurred when execution some handler", exc_info=True)
             await bot_control.set_current(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
             raise e
 
@@ -41,9 +39,8 @@ class BuildBotControl(BaseMiddleware):
             bot=self._bot,
             chat_id=str(await self._extract_chat_id(event)),
             state=state,
-            set_up_windows=self._set_up_windows,
             bot_storage=self._bot_storage,
-            user_storage=ImmuneDict(f"{await self._extract_user_id(event)}:user_storage"),
+            user_storage=DictStorage(f"{await self._extract_user_id(event)}:user_storage"),
         )
         return bot_control
 

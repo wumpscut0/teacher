@@ -9,21 +9,21 @@ config = {
         "errors": {
             "class": "logging.FileHandler",
             "formatter": "default",
-            "filename": "errors_alt_telegram.log",
+            "filename": "errors_tools.log",
         },
         "info": {
             "class": "logging.FileHandler",
             "formatter": "default",
-            "filename": "info_alt_telegram.log",
+            "filename": "info_tools.log",
         },
     },
     "loggers": {
-        "errors_alt_telegram": {"level": logging.ERROR, "handlers": ["errors"]},
-        "info_alt_telegram": {"level": logging.DEBUG, "handlers": ["info"]},
+        "errors_redis_tools": {"level": logging.ERROR, "handlers": ["errors"]},
+        "info_redis_tools": {"level": logging.DEBUG, "handlers": ["info"]},
     },
 }
 
 dictConfig(config)
 
-telegram_alt_errors = logging.getLogger("errors_alt_telegram")
-telegram_alt_info = logging.getLogger("info_alt_telegram")
+tools_errors = logging.getLogger("errors_redis_tools")
+tools_info = logging.getLogger("info_redis_tools")

@@ -1,6 +1,6 @@
 import asyncio
 import string
-from asyncio import gather, create_task
+from asyncio import gather, create_task, to_thread
 import json
 from copy import deepcopy
 from os import getenv
@@ -9,8 +9,8 @@ from re import fullmatch, I
 from typing import Dict, List
 
 from aiohttp import ClientSession
-from core.loggers import info, errors
-from tools import ImmuneDict
+from core.loggers import telegram_alt_info, telegram_alt_errors
+from tools import DictStorage
 
 
 class WordCard:
@@ -132,10 +132,10 @@ class SuperEnglishDictionary:
         "Content-Type": "application/json"
     }
 
-    _word_data_cache = ImmuneDict("english_words_data")
-    _translations_cache = ImmuneDict("deep-translate1.p.rapidapi.com")
-    _audio_and_examples_cache = ImmuneDict("api.dictionaryapi.dev")
-    _yandex_cache = ImmuneDict("dictionary.yandex.net")
+    _word_data_cache = DictStorage("english_words_data")
+    _translations_cache = DictStorage("deep-translate1.p.rapidapi.com")
+    _audio_and_examples_cache = DictStorage("api.dictionaryapi.dev")
+    _yandex_cache = DictStorage("dictionary.yandex.net")
 
     @classmethod
     async def extract_data(cls, word: str, cache=True) -> WordData | None:
@@ -144,7 +144,7 @@ class SuperEnglishDictionary:
 
         if cache:
             try:
-                return WordData(word, cls._word_data_cache[word])
+                return WordData(word, await cls._word_data_cache.get_value_by_key(word))
             except KeyError:
                 pass
 
@@ -164,12 +164,15 @@ class SuperEnglishDictionary:
         if not word_data.translations:
             return None
 
-        cls._word_data_cache[word] = data
+        cache = await cls._word_data_cache.get()
+        cache[word] = data
+        await cls._word_data_cache.set(cache)
+
         return word_data
 
     @classmethod
     async def _translate(cls, text: str, cache: bool = True):
-        if not fullmatch(r"""[a-z-,?.!:$%#*()&№`~";'0-9 ]+""", text, flags=I):
+        if not fullmatch(r"""[a-z-,?.!:$%#*()&№’`~";'0-9 ]+""", text, flags=I):
             raise ValueError(f"Incorrect text {text} to translate")
 
         body = {
@@ -179,7 +182,7 @@ class SuperEnglishDictionary:
         }
 
         if cache:
-            tr = cls._translations_cache.get(text)
+            tr = await cls._word_data_cache.get_value_by_key(text)
             if tr:
                 return tr
 
@@ -194,20 +197,20 @@ class SuperEnglishDictionary:
                     data = await response_.json()
                     try:
                         tr = data["data"]["translations"]["translatedText"]
-                        cls._translations_cache[text] = tr
+                        await cls._word_data_cache.set_value_by_key(text, tr)
                         return tr
-                    except KeyError:
-                        raise KeyError(f"Translate API {cls._translate_host} returned unexpected data {data}\n"
-                                       f"Status {status}")
+                    except KeyError as e:
+                        e.add_note(f"Translate API {cls._translate_host} returned unexpected data {data} Status {status}")
+                        raise e
                 else:
-                    errors.error(f"Translate API returned unexpected code {status}")
+                    telegram_alt_errors.error(f"Translate API returned unexpected code {status}")
 
     @classmethod
     async def _audio_and_examples(cls, word: str, cache: bool = True):
         if cache:
-            data = cls._audio_and_examples_cache.get(word)
+            data = await cls._audio_and_examples_cache.get_value_by_key(word)
             if data:
-                return data
+                return await to_thread(cls._audio_and_examples_parsing, data, word)
 
         path = f"{cls._audio_and_examples_host}/api/v2/entries/en/{word}"
         async with ClientSession() as session:
@@ -216,14 +219,14 @@ class SuperEnglishDictionary:
                 if status == 200:
                     data = await response_.json()
                     try:
-                        cls._audio_and_examples_cache[word] = data
-                        return await cls._audio_and_examples_parsing(data, word)
+                        await cls._audio_and_examples_cache.set_value_by_key(word, data)
+                        return await to_thread(cls._audio_and_examples_parsing, data, word)
                     except KeyError:
-                        info.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
+                        telegram_alt_info.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
                 elif status == 404:
-                    info.warning(f"No audio_and_examples for word {word}")
+                    telegram_alt_info.warning(f"No audio_and_examples for word {word}")
                 else:
-                    errors.error(f"audio_and_examples API returned unexpected code {status}")
+                    telegram_alt_errors.error(f"audio_and_examples API returned unexpected code {status}")
 
     @classmethod
     async def _audio_and_examples_parsing(cls, data: Dict, word: str):
@@ -257,9 +260,9 @@ class SuperEnglishDictionary:
     @classmethod
     async def _yandex(cls, word: str, cache: bool = True):
         if cache:
-            data = cls._yandex_cache.get(word)
+            data = await cls._yandex_cache.get_value_by_key(word)
             if data:
-                return data
+                return await to_thread(cls._yandex_parsing, data)
 
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect text {word} to yandex translate")
@@ -272,15 +275,15 @@ class SuperEnglishDictionary:
                 if status == 200:
                     data = await response_.json()
                     try:
-                        cls._yandex_cache[word] = data
-                        return cls._yandex_parsing(data)
+                        await cls._yandex_cache.set_value_by_key(word, data)
+                        return await to_thread(cls._yandex_parsing, data)
                     except KeyError as e_:
                         e_.add_note(
-                            f"Yandex dict API {cls._yandex_host} returned unexpected data {data} Status {status} {e}"
+                            f"Yandex dict API {cls._yandex_host} returned unexpected data {data} Status {status}"
                         )
                         raise e_
                 else:
-                    errors.error(f"Yandex dict API returned unexpected code {status}")
+                    telegram_alt_errors.error(f"Yandex dict API returned unexpected code {status}")
 
     @classmethod
     def _yandex_parsing(cls, data: Dict):

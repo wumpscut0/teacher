@@ -1,5 +1,4 @@
 import os
-from typing import List
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import FSInputFile

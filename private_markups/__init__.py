@@ -35,7 +35,7 @@ class PrivateTuurngaidTitleScreen(WindowBuilder):
         ]
 
 
-class SuggestWord(WindowBuilder):
+class SuggestWords(WindowBuilder):
     def __init__(self):
         super().__init__(
             unique=True,
@@ -43,7 +43,7 @@ class SuggestWord(WindowBuilder):
             back_text=Emoji.BACK
         )
         self.add_texts_rows(
-            TextWidget(text="Suggest a ENGLISH word to Tuurngait that goes in the English Run.")
+            TextWidget(text="Suggest a ENGLISH words spaces-separated. They could to supply the English Run.")
         )
 
     def suggest_another_word_display(self, suggest: str):
@@ -65,7 +65,7 @@ class English(WindowBuilder):
         self._question_widget_temp: DataTextWidget | None = None
         self.deck_size = len(deck)
         self._rewards = defaultdict(int)
-        self._total_dna = total_dna
+        self.total_dna = total_dna
         self._dna = 0
         self.past_dna = 0
         self.temp_dna = 0
@@ -155,7 +155,7 @@ class English(WindowBuilder):
             DataTextWidget(text=f"{Emoji.BOOKS_STACK} Stage", data=str(self._possible_count_right_answers)))
 
     def _total_dna_display(self):
-        self.add_texts_rows(DataTextWidget(text=f"Total {Emoji.DNA}", data=str(self._total_dna) + "\n", sep=""))
+        self.add_texts_rows(DataTextWidget(text=f"Total {Emoji.DNA}", data=str(self.total_dna) + "\n", sep=""))
 
     def _calc_default_en_ru(self, answer: str):
         correct_answers = list(map(lambda x: x.strip().lower(), self.current_card.answer))
@@ -238,7 +238,7 @@ class English(WindowBuilder):
     def _good(self):
         self.add_texts_rows(
             TextWidget(
-                text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self.past_dna} + {self.temp_dna}\nGood!{Emoji.BRAIN}"
+                text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self.past_dna} + {self.temp_dna}\n{Emoji.BRAIN} Good!"
             )
         )
         self._count_right_answers += 1

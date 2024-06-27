@@ -10,7 +10,7 @@ from core import WindowBuilder, SCHEDULER, _BotCommands
 from core.handlers.abyss import abyss_router
 from core.handlers.commands import default_commands_router, group_commands
 from core.middleware import BuildBotControl
-from tools import ImmuneDict
+from tools import DictStorage
 
 
 class BuildBot:
@@ -29,21 +29,24 @@ class BuildBot:
             hello_screen: WindowBuilder,
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
-        bot_storage = ImmuneDict(f"{self.bot.id}:bot_storage")
-        set_up_windows = ImmuneDict(self.bot.id)
-        set_up_windows["private_title_screen"] = private_title_screen
-        set_up_windows["group_title_screen"] = group_title_screen
-        set_up_windows["greetings"] = hello_screen
-        self.dispatcher.update.middleware(BuildBotControl(
-            self.bot,
-            set_up_windows,
-            bot_storage,
-        ))
-        self.dispatcher.include_routers(default_commands_router, group_commands, *routers, abyss_router)
-        SCHEDULER.start()
+        self.bot_storage = DictStorage(f"{self.bot.id}:bot_storage")
+        self._set_up = {
+            "private_title_screen": private_title_screen,
+            "group_title_screen": group_title_screen,
+            "greetings": hello_screen
+        }
+        self.routers = routers
 
     async def start_polling(self, custom_commands: List[BotCommand]):
+        for k, v in self._set_up.items():
+            await self.bot_storage.set_value_by_key(k, v)
+        self.dispatcher.update.middleware(BuildBotControl(self.bot, self.bot_storage))
+        self.dispatcher.include_routers(default_commands_router, group_commands, *self.routers, abyss_router)
+
+        SCHEDULER.start()
+
         commands = _BotCommands.commands()
         commands.extend(custom_commands)
         await self.bot.set_my_commands(commands)
+
         await self.dispatcher.start_polling(self.bot)
