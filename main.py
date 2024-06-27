@@ -1,8 +1,6 @@
 import asyncio
 import os
 
-from database.queries import drop_all, create_all
-# from database.queries import drop_all, create_all
 from group_markups import GroupPartyTitleScreen
 from private_markups import PrivateTuurngaidTitleScreen, Greetings
 from core.dispatcher import BuildBot
@@ -12,8 +10,6 @@ from private_handlers.commands import commands_router, BotCommands
 
 
 async def main():
-    # await drop_all()
-    # await create_all()
     await BuildBot(
         commands_router,
         english_router,

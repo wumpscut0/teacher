@@ -6,7 +6,6 @@ from aiogram.filters import StateFilter, Command
 from aiogram.types import Message, BotCommand
 
 from FSM import States
-from cache import Offer
 from config import WORD_LENGTH
 from core import Routers, BotControl
 from core.markups import TextWidget
@@ -26,7 +25,7 @@ class BotCommands:
 @commands_router.message(BotCommands.offer_word)
 async def offer_word(message: Message, bot_control: BotControl):
     await message.delete()
-    await bot_control.append(await SuggestWord().update())
+    await bot_control.append(SuggestWord())
 
 
 @commands_router.message(StateFilter(States.input_text_suggest_word), F.text)
@@ -34,12 +33,16 @@ async def offer_word(message: Message, bot_control: BotControl):
     word = message.text.translate(str.maketrans("", "", string.punctuation.replace("-", "") + "№\n "))
     await message.delete()
 
-    suggest = bot_control.current
+    suggest: SuggestWord = bot_control.current
     if len(word) > WORD_LENGTH or not re.fullmatch(r"[a-zA-Z-]+", word):
         suggest.add_texts_rows(TextWidget(text="Incorrect input"))
         await bot_control.set_current(suggest)
         return
 
-    Offer().append(word)
-    suggest.prompt = f'"{word}" sent.\n\nSuggest another word'
-    await bot_control.set_current(await suggest.update())
+    offer = bot_control.bot_storage.get("offer", set())
+
+    offer.add(word)
+    bot_control.bot_storage["offer"] = offer
+
+    suggest.suggest_another_word_display(word)
+    await bot_control.set_current(suggest)

@@ -2,7 +2,7 @@ from base64 import b64decode, b64encode
 from os import getenv
 from math import ceil
 from pickle import dumps, loads
-from typing import Union, Any, List, Dict, Hashable, Set, Iterable
+from typing import Union, Any, List, Set, Iterable
 
 from dotenv import find_dotenv, load_dotenv
 from redis import Redis
@@ -14,6 +14,7 @@ load_dotenv(find_dotenv())
 
 
 class Emoji:
+    STAR = "⭐"
     LAMP = "💡"
     OK = "✅"
     DENIAL = "❌"
@@ -123,6 +124,16 @@ class Emoji:
     ALCHEMY = "⚗️"
     VIOLET_ATOM = "⚛️"
     SPIRAL = "🌀"
+    PUZZLE = "🧩"
+    WAVE = "🌊"
+    BOOKS_STACK = "📚"
+    SQUARE_ACADEMIC_CAP = "🎓"
+    BIOHAZARD = "☣"
+    BIOHAZARD_2 = "☣️"
+    BIOHAZARD_3 = "☣"
+    SCALES = "⚖"
+    SCALES_2 = "⚖️"
+    DOWN_ARROW = "⬇"
 
 
 def create_progress_text(
@@ -139,7 +150,7 @@ def create_progress_text(
         progress = progress_element * length_widget
     else:
         float_fraction = numerator / denominator * length_widget
-        percent = ceil(float_fraction * 10)
+        percent = ceil(numerator / denominator * 100)
         fraction = ceil(float_fraction)
         grey_progress = (length_widget - fraction) * remaining_element
         green_progress = fraction * progress_element
@@ -217,112 +228,106 @@ class Storage:
         host=getenv("REDIS_HOST"), port=int(getenv("REDIS_PORT")), db=1
     )
 
-    def __init__(self, id_: str = ""):
-        self._id_ = id_
+    def __init__(self, key: str = ""):
+        self._key = key
 
-    def _get(self, key: str, default: Any | None = None):
+    def _get(self, default: Any | None = None):
         try:
-            value = self.STORAGE.get(f"{key}:{self._id_}")
+            value = self.STORAGE.get(self._key)
+            print(f"GET key: {self._key} ; value: {value}")
         except (AttributeError, ModuleNotFoundError, Exception):
-            print(f"Impossible restore broken deserialized data\nKey: {key}")
-            self._set(key, default)
+            print(f"Impossible restore broken deserialized data\nKey: {self._key}")
+            self._set(default)
             return default
         if value is None:
             return default
         return value
 
-    def _set(self, key: str, value: Any):
-        self.STORAGE.set(f"{key}:{self._id_}", value)
+    def _set(self, value: Any):
+        # print(f"SET key: {self._key} ; value: {value}")
+        self.STORAGE.set(self._key, value)
+
+    def destroy(self):
+        self.STORAGE.set(self._key, None)
 
 
 class ImmuneDict(Storage):
-    def __init__(self, dict_name: str = "common_dict"):
-        super().__init__(dict_name)
+    def __init__(self, id_: str | int = "common_dict"):
+        super().__init__(id_)
 
-    @property
-    def dict(self) -> Dict[Hashable, Any]:
-        return self._get(self._id_, {})
+    def __getitem__(self, key: str):
+        return self._get({})[key]
 
-    def __getitem__(self, item: Hashable):
-        return self.dict.get(item)
-
-    @dict.setter
-    def dict(self, dict_: Dict[Hashable, Any]):
-        self._set(self._id_, dict_)
-
-    def __setitem__(self, key: Hashable, value: Any):
-        dict_ = self.dict
+    def __setitem__(self, key: str, value: Any):
+        dict_ = self._get({})
         dict_[key] = value
-        self.dict = dict_
+        self._set(dict_)
 
-    def destroy(self):
-        self.dict = None
+    def get(self, key: str, default: Any | None = None):
+        try:
+            return self._get({})[key]
+        except KeyError:
+            return default
 
 
 class ImmuneList(Storage):
-    def __init__(self, list_name: str = "common_list"):
-        super().__init__(list_name)
+    def __init__(self, id_: str | int = "common_list"):
+        super().__init__(id_)
 
     @property
-    def _list(self) -> List[Any]:
-        return self._get(self._id_, [])
+    def list(self) -> List[Any]:
+        return self._get([])
 
     def __getitem__(self, index: int):
-        try:
-            return self._list[index]
-        except IndexError:
-            return
+        return self.list[index]
 
-    @_list.setter
-    def _list(self, list_: List[Any]):
-        self._set(self._id_, list_)
+    @list.setter
+    def list(self, list_: List[Any]):
+        self._set(list_)
 
     def __setitem__(self, index: int, value: Any):
-        list_ = self._list
+        list_ = self.list
         list_[index] = value
-        self._list = list_
+        self.list = list_
 
     def append(self, item: Any):
-        list_ = self._list
+        list_ = self.list
         list_.append(item)
-        self._list = list_
+        self.list = list_
 
     def extend(self, items: Iterable):
-        list_ = self._list
+        list_ = self.list
         list_.extend(items)
-        self._list = list_
+        self.list = list_
 
     def pop_last(self):
-        list_ = self._list
+        list_ = self.list
         if not list_:
             return
         item = list_.pop()
-        self._list = list_
+        self.list = list_
         return item
 
     def reset(self, item: Any):
-        self._list = [item]
+        self.list = [item]
 
     def remove(self, message_id: int):
-        list_ = self._list
+        list_ = self.list
         try:
             list_.remove(message_id)
-            self._list = list_
+            self.list = list_
             return True
         except ValueError:
             return False
 
-    def destroy(self):
-        self._list = None
-
 
 class ImmuneSet(Storage):
-    def __init__(self, set_name: str = "common_set"):
-        super().__init__(set_name)
+    def __init__(self, id_: str | int = "common_set"):
+        super().__init__(id_)
 
     @property
     def set(self) -> Set:
-        return self._get(self._id_, set())
+        return self._get(set())
 
     def add(self, item: Any):
         set_ = self.set
@@ -331,7 +336,4 @@ class ImmuneSet(Storage):
 
     @set.setter
     def set(self, set_: Set):
-        self._set(self._id_, set_)
-
-    def destroy(self):
-        self.set = None
+        self._set(set_)

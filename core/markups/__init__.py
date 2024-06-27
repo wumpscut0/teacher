@@ -11,6 +11,9 @@ from aiogram.fsm.state import State
 from tools import Emoji
 
 
+T = TypeVar("T")
+
+
 class TextWidget:
     def __init__(
         self,
@@ -21,42 +24,38 @@ class TextWidget:
         sep: str = " ",
     ):
         self.mark = mark
-        self._text = text
+        self.text = text
         self.mark_left = mark_left
         self.sep = sep
 
     @property
-    def text(self):
+    def formatted_text(self):
         if self.mark_left:
-            return Text(self.mark) + Text(self.sep) + Bold(self._text)
-        return Bold(self._text) + Text(self.sep) + Text(self.mark)
-
-    @text.setter
-    def text(self, text: str):
-        self._text = text
+            return Text(self.mark) + Text(self.sep) + Bold(self.text)
+        return Bold(self.text) + Text(self.sep) + Text(self.mark)
 
 
-class DataTextWidget(TextWidget):
+class DataTextWidget:
     def __init__(
         self,
         *,
         mark: str = "",
+        mark_sep: str = " ",
         text: str = Emoji.BAN,
         data: str = Emoji.GREY_QUESTION,
         sep: str = ": ",
         end: str = "",
     ):
-        super().__init__(
-            mark=mark,
-            text=text,
-        )
+        self.mark = mark
+        self.mark_sep = mark_sep
+        self.text = text
         self.data = data
-        self.sep_ = sep
+        self.sep = sep
         self.end = end
 
     @property
-    def text(self):
-        return super().text + Text(self.sep_) + Italic(self.data) + Italic(self.end)
+    def formatted_text(self):
+        return Text(self.mark) + Text(self.mark_sep) + Bold(self.text) + Text(self.sep) + Italic(self.data) + Italic(self.end)
 
 
 class ButtonWidget:
@@ -70,24 +69,16 @@ class ButtonWidget:
         callback_data: str | CallbackData = Emoji.BAN,
     ):
         self.mark = mark
-        self._text = text
+        self.text = text
         self.mark_left = mark_left
         self.sep = sep
         self.callback_data = callback_data
 
     @property
-    def only_text(self):
-        return self.text.lstrip(self.mark + self.sep)
-
-    @property
-    def text(self):
+    def formatted_text(self):
         if self.mark_left:
-            return self.mark + self.sep + self._text
-        return self._text + self.sep + self.mark
-
-    @text.setter
-    def text(self, text: str):
-        self._text = text
+            return self.mark + self.sep + self.text
+        return self.text + self.sep + self.mark
 
 
 class TextMarkupConstructor:
@@ -108,11 +99,11 @@ class TextMarkupConstructor:
             self._text_map.append(text)
 
     @property
-    def text(self):
+    def as_html(self):
         try:
-            return (as_list(*(text.text for text in self._text_map))).as_html()
+            return (as_list(*(text.formatted_text for text in self._text_map))).as_html()
         except IndexError:
-            return ""
+            return "No Data"
 
 
 class KeyboardMarkupConstructor:
@@ -179,67 +170,69 @@ class KeyboardMarkupConstructor:
         for buttons_row in self._keyboard_map:
             row = InlineKeyboardBuilder()
             for button in buttons_row:
-                row.button(text=button.text, callback_data=button.callback_data)
+                row.button(text=button.formatted_text, callback_data=button.callback_data)
             markup.attach(row)
         return markup.as_markup()
 
 
-T = TypeVar("T")
-
-
-class _MetaReturnUpdateSelf(type):
-    @staticmethod
-    def _self_returner(update):
-        async def wrapper(self, *args, **kwargs):
-            await update(self, *args, **kwargs)
-            return self
-        return wrapper
-
-    def __new__(cls, name, bases, dct):
-        instance = super().__new__(cls, name, bases, dct)
-        instance.update = cls._self_returner(instance.update)
-        return instance
-
-
 class WindowBuilder(
     TextMarkupConstructor,
-    KeyboardMarkupConstructor,
-    metaclass=_MetaReturnUpdateSelf,
+    KeyboardMarkupConstructor
 ):
-    _max_buttons = 100
-    _max_symbols = 1024
     _available_types = "text", "photo", "audio"
 
     def __init__(
             self,
             *,
             unique: bool = False,
+            frozen: bool = False,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
             voice: str | FSInputFile | None = None,
             text_map: list[DataTextWidget | TextWidget] | None = None,
             keyboard_map: list[list[ButtonWidget]] | None = None,
-            burying: bool = True,
+            backable: bool = True,
             back_text: str = Emoji.BACK,
             left_text: str = Emoji.LEFT,
             left_mark: str = "",
             right_text: str = Emoji.RIGHT,
             right_mark: str = "",
             size_page: int = 10,
+            buttons_per_line: int = 1,
             page: int = 0,
-            data: list[Any] = None,
+            data: list[ButtonWidget] = None,
     ):
+        """
+        :param unique: True mean no additional layers per chat
+        :param type_: type message in telegram
+        :param state: User state when active that window
+        :param photo: will be show when active that window and type set as photo
+        :param voice: will be show when active that window and type set as voice
+        :param text_map: struct with text widgets
+        :param keyboard_map: struct with button widgets
+        :param backable: auto-adding back button with prepared handler
+        :param back_text: text in back button
+        :param left_text: text in left button
+        :param left_mark: mark in left button
+        :param right_text: text in right button
+        :param right_mark: mark in right button
+        :param size_page: quantity buttons per page
+        :param page: start page number
+        :param data: ButtonWidget array, will be parsed and if size_page > len(data) will be auto-added pagination
+        """
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
+        self.frozen = frozen
         self.unique = unique
-        self.control_inited = False
+        self.back_inited = False
+        self.pagination_inited = False
+        self.extra_inited = False
         self.data = [] if data is None else data
         self._size_page = size_page
-        if size_page > self._max_buttons:
-            raise ValueError(f"Max size page is {self._max_buttons}")
+        self.buttons_per_line = buttons_per_line
         self._partitioned_data = self.split(size_page, self.data)
-        self.burying = burying
+        self.backable = backable
         self.page = page
         self.type = type_
         self.state = state
@@ -247,9 +240,7 @@ class WindowBuilder(
         self._voice = voice
         self.left = ButtonWidget(text=left_text, mark=left_mark, sep="", callback_data="flip_left")
         self.right = ButtonWidget(text=right_text, mark=right_mark, sep="", callback_data="flip_right")
-        self.back = ButtonWidget(text=back_text, callback_data="bury")
-        if len(self.text) > self._max_symbols:
-            raise ValueError(f"Max symbols per message is {self._max_symbols}")
+        self.back = ButtonWidget(text=back_text, callback_data="back")
         if self.type not in self._available_types:
             raise ValueError(f"Available type is {self._available_types} not {self.type}")
 
@@ -261,17 +252,21 @@ class WindowBuilder(
     def partitioned_data(self, partitioned_data: List[Any]):
         self._partitioned_data[self.page % len(self._partitioned_data)] = partitioned_data
 
-    def init_control(self):
+    def init_pagination(self):
         if len(self._partitioned_data) > 1:
             self.add_buttons_in_new_row(self.left, self.right)
-        if self.burying:
+            self.pagination_inited = True
+
+    def init_control(self):
+        if self.backable:
             self.add_buttons_in_new_row(self.back)
-        self.control_inited = True
+            self.back_inited = True
 
     def reset(self):
         self.text_map = []
         self.keyboard_map = [[]]
-        self.control_inited = False
+        self.back_inited = False
+        self.pagination_inited = False
 
     @property
     def voice(self):
@@ -305,9 +300,6 @@ class WindowBuilder(
         lines.append(line)
         return lines
 
-    async def update(self, *args, **kwargs):
-        ...
-
 
 class Info(WindowBuilder):
     def __init__(
@@ -315,11 +307,8 @@ class Info(WindowBuilder):
         text: str,
         back_text: str = "Ok",
     ):
-        super().__init__(unique=False, back_text=back_text)
-        self.info = text
-
-    async def update(self):
-        self.add_texts_rows(TextWidget(text=self.info))
+        super().__init__(back_text=back_text)
+        self.add_texts_rows(TextWidget(text=text))
 
 
 class Temp(WindowBuilder):
@@ -327,11 +316,8 @@ class Temp(WindowBuilder):
         self,
         text: str = f"{Emoji.HOURGLASS_START} Processing...",
     ):
-        super().__init__(unique=False, burying=False)
-        self.info = text
-
-    async def update(self):
-        self.add_texts_rows(TextWidget(text=self.info))
+        super().__init__(backable=False)
+        self.add_texts_rows(TextWidget(text=text))
 
 
 class Input(WindowBuilder):
@@ -341,33 +327,23 @@ class Input(WindowBuilder):
         state: State | str,
         back_text: str = f"{Emoji.DENIAL} Cancel",
     ):
-        super().__init__(unique=False, state=state, back_text=back_text)
-        self.prompt = prompt
-
-    async def update(self):
-        self.add_texts_rows(TextWidget(text=self.prompt))
+        super().__init__(state=state, back_text=back_text)
+        self.add_texts_rows(TextWidget(text=prompt))
 
 
 class Conform(WindowBuilder):
     def __init__(
         self,
-        text: str,
+        prompt: str,
         yes_callback_data: str | CallbackData,
         *,
-        no_callback_data: str | CallbackData = "bury",
+        no_callback_data: str | CallbackData = "back",
         yes_text: str = f"{Emoji.OK} Yes",
         no_text: str = f"{Emoji.DENIAL} No",
     ):
-        super().__init__(unique=False, back_text=no_text, burying=False)
-        self.yes_callback_data = yes_callback_data
-        self.no_callback_data = no_callback_data
-        self.yes_text = yes_text
-        self.prompt = text
-        self.no_text = no_text
-
-    async def update(self):
-        self.add_texts_rows(TextWidget(text=self.prompt))
+        super().__init__(back_text=no_text, backable=False)
+        self.add_texts_rows(TextWidget(text=prompt))
         self.add_buttons_in_new_row(
-            ButtonWidget(text=self.yes_text, callback_data=self.yes_callback_data),
-            ButtonWidget(text=self.no_text, callback_data=self.no_callback_data)
+            ButtonWidget(text=yes_text, callback_data=yes_callback_data),
+            ButtonWidget(text=no_text, callback_data=no_callback_data)
         )
