@@ -39,10 +39,10 @@ async def edit_english_run(callback: CallbackQuery, bot_control: BotControl):
 @party_router.callback_query(WordTickCallbackData.filter())
 async def marking_words(callback: CallbackQuery, callback_data: WordTickCallbackData, bot_control: BotControl):
     markup = await bot_control.current()
-    if markup.partitioned_data[callback_data.index].mark == Emoji.OK:
-        markup.partitioned_data[callback_data.index].mark = Emoji.DENIAL
+    if markup.data[callback_data.index].mark == Emoji.OK:
+        markup.data[callback_data.index].mark = Emoji.DENIAL
     else:
-        markup.partitioned_data[callback_data.index].mark = Emoji.OK
+        markup.data[callback_data.index].mark = Emoji.OK
 
     await bot_control.set_current(markup)
 

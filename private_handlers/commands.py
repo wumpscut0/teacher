@@ -7,7 +7,7 @@ from aiogram.types import Message, BotCommand
 
 from FSM import States
 from core import Routers, BotControl
-from core.markups import TextWidget, Info
+from core.markups import Info
 from private_markups import SuggestWords
 
 commands_router = Routers.private()

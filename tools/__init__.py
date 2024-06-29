@@ -9,8 +9,7 @@ from redis.asyncio import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
 
-from core.loggers import telegram_alt_info
-from tools.loggers import tools_errors, tools_info
+from tools.loggers import debug_tools, info_tools, errors_tools
 
 load_dotenv(find_dotenv())
 
@@ -224,9 +223,9 @@ class Storage:
     async def get(self):
         try:
             value = await self.CLIENT.get(self._key)
-            tools_info.debug(f"GET key: {self._key} -> value: {value}")
+            debug_tools.debug(f"GET key: {self._key} -> value: {value}")
         except (AttributeError, ModuleNotFoundError, Exception):
-            tools_errors.error(f"Impossible restore broken deserialized data\nKey: {self._key}")
+            errors_tools.error(f"Impossible restore broken deserialized data\nKey: {self._key}")
             await self.set(self._default)
             return self._default
         if value is None:
@@ -235,19 +234,19 @@ class Storage:
 
     async def set(self, value: Any, save_data_in_log: bool = True):
         if save_data_in_log:
-            tools_info.info(f"SET value: {await self.get()} by key: {self._key} -> value: {value}")
+            debug_tools.debug(f"SET value: {await self.get()} by key: {self._key} -> value: {value}")
         else:
-            tools_info.debug(f"SET key: {self._key} -> value: {value}")
+            debug_tools.debug(f"SET key: {self._key} -> value: {value}")
         await self.CLIENT.set(self._key, value)
 
     async def destroy(self, save_data_in_log: bool = True):
         if save_data_in_log:
             data = await self.CLIENT.get(self._key)
             await self.CLIENT.set(self._key, None)
-            telegram_alt_info.warning(f"Data: {data} removed from key: {self._key} ")
+            info_tools.info(f"Data: {data} removed from key: {self._key} ")
         else:
             await self.CLIENT.set(self._key, None)
-            telegram_alt_info.warning(f"Data by key: {self._key} destroyed")
+            info_tools.info(f"Data by key: {self._key} destroyed")
 
 
 class DictStorage(Storage):

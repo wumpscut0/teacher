@@ -6,7 +6,6 @@ from aiogram.types import Update
 
 from core import BotControl
 from core.markups import Info
-from core.loggers import telegram_alt_errors
 from tools import Emoji, DictStorage
 
 
@@ -30,7 +29,6 @@ class BuildBotControl(BaseMiddleware):
         try:
             return await handler(event, data)
         except (ValueError, BaseException) as e:
-            telegram_alt_errors.critical(f"An error occurred when execution some handler", exc_info=True)
             await bot_control.set_current(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
             raise e
 

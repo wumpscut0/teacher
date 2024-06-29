@@ -16,14 +16,21 @@ config = {
             "formatter": "default",
             "filename": "info_alt_telegram.log",
         },
+        "debug": {
+            "class": "logging.FileHandler",
+            "formatter": "default",
+            "filename": "debug_alt_telegram.log",
+        },
     },
     "loggers": {
         "errors_alt_telegram": {"level": logging.ERROR, "handlers": ["errors"]},
-        "info_alt_telegram": {"level": logging.DEBUG, "handlers": ["info"]},
+        "info_alt_telegram": {"level": logging.INFO, "handlers": ["info"]},
+        "debug_alt_telegram": {"level": logging.DEBUG, "handlers": ["debug"]},
     },
 }
 
 dictConfig(config)
 
-telegram_alt_errors = logging.getLogger("errors_alt_telegram")
-telegram_alt_info = logging.getLogger("info_alt_telegram")
+errors_alt_telegram = logging.getLogger("errors_alt_telegram")
+info_alt_telegram = logging.getLogger("info_alt_telegram")
+debug_alt_telegram = logging.getLogger("debug_alt_telegram")

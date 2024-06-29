@@ -3,8 +3,7 @@ import os
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import FSInputFile
 
-from core import WindowBuilder, ButtonWidget, TextWidget
-
+from core.markups import ButtonWidget, TextWidget, WindowBuilder
 from tools import Emoji
 
 

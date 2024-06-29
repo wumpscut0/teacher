@@ -10,8 +10,7 @@ from aiogram.types import FSInputFile
 
 from FSM import States
 from api import WordCard
-from core import ButtonWidget, WindowBuilder
-from core.markups import DataTextWidget, TextWidget
+from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
 from tools import Emoji, create_progress_text
 
 
