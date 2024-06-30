@@ -1,12 +1,12 @@
 import os
-from typing import List
+from typing import List, Type
 
 from aiogram import Dispatcher, Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage, Redis
 from aiogram.types import BotCommand
 
-from core import WindowBuilder, SCHEDULER, _BotCommands
+from core import WindowBuilder, SCHEDULER, _BotCommands, BotControl
 from core.handlers.abyss import abyss_router
 from core.handlers.commands import default_commands_router, group_commands
 from core.middleware import BuildBotControl
@@ -27,6 +27,7 @@ class BuildBot:
             private_title_screen: WindowBuilder,
             group_title_screen: WindowBuilder,
             hello_screen: WindowBuilder,
+            bot_control_schema: Type[BotControl] = BotControl
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
         self.bot_storage = DictStorage(f"{self.bot.id}:bot_storage")
@@ -36,11 +37,12 @@ class BuildBot:
             "greetings": hello_screen
         }
         self.routers = routers
+        self.bot_control_schema = bot_control_schema
 
     async def start_polling(self, custom_commands: List[BotCommand]):
         for k, v in self._set_up.items():
             await self.bot_storage.set_value_by_key(k, v)
-        self.dispatcher.update.middleware(BuildBotControl(self.bot, self.bot_storage))
+        self.dispatcher.update.middleware(BuildBotControl(self.bot, self.bot_storage, self.bot_control_schema))
         self.dispatcher.include_routers(default_commands_router, group_commands, *self.routers, abyss_router)
 
         SCHEDULER.start()

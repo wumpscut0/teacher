@@ -21,14 +21,10 @@ class _BotCommands:
     _AWAIT_TIME_MESSAGE_DELETE = 60
     start = Command("start")
     exit = Command("exit")
-    continue_ = Command("continue")
 
     @classmethod
     def commands(cls):
         return [
-            BotCommand(
-                command=f"/continue", description=f"Continue {Emoji.ZAP}"
-            ),
             BotCommand(
                 command="/exit", description=f"Close {Emoji.ZZZ}"
             ),
@@ -110,6 +106,18 @@ class BotControl:
     async def greetings(self):
         await self.append(await self.bot_storage.get_value_by_key("greetings"))
 
+    async def get_private_title_screen(self) -> WindowBuilder:
+        return await self.bot_storage.get_value_by_key("private_title_screen")
+
+    async def set_private_title_screen(self, private_title_screen: WindowBuilder):
+        return await self.bot_storage.set_value_by_key("private_title_screen", private_title_screen)
+
+    async def get_group_title_screen(self) -> WindowBuilder:
+        return await self.bot_storage.get_value_by_key("group_title_screen")
+
+    async def set_group_title_screen(self, group_title_screen: WindowBuilder):
+        return await self.bot_storage.set_value_by_key("group_title_screen", group_title_screen)
+
     async def extend(self, *markups_: WindowBuilder):
         names = [i.__class__.__name__ for i in await self._context.get()]
         to_extend = []
@@ -134,9 +142,9 @@ class BotControl:
 
     async def reset(self):
         if self.chat_id.startswith("-"):
-            markup = await self.bot_storage.get_value_by_key("group_title_screen")
+            markup = await self.get_group_title_screen()
         else:
-            markup = await self.bot_storage.get_value_by_key("private_title_screen")
+            markup = await self.get_private_title_screen()
 
         await self._init_markup(markup)
 
@@ -193,10 +201,10 @@ class BotControl:
                 reply_markup=markup.keyboard,
             )
         except TelegramBadRequest as e:
-            await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.append(markup)
+                return
             else:
+                await self._delete_message(last_message_id)
                 await self._update_message[markup.type](markup)
 
     async def _create_photo_message(self, markup: WindowBuilder):
@@ -235,8 +243,9 @@ class BotControl:
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.append(markup)
+                return
             else:
+                await self._delete_message(last_message_id)
                 await self._update_message[markup.type](markup)
 
     async def _create_voice_message(self, markup: WindowBuilder):
@@ -272,10 +281,10 @@ class BotControl:
                 reply_markup=markup.keyboard
             )
         except TelegramBadRequest as e:
-            await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                await self.append(markup)
+                return
             else:
+                await self._delete_message(last_message_id)
                 await self._update_message[markup.type](markup)
 
     async def _init_markup(self, markup: WindowBuilder):

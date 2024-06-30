@@ -113,6 +113,7 @@ class Emoji:
     BOX = "📦"
     DNA = "🧬"
     FLASK = "🧪"
+    DARK_START = "★"
     BROKEN_ROSE = "🥀"
     HYGEUM = "⚕"
     WRITING_HAND = "✍"
@@ -128,9 +129,12 @@ class Emoji:
     PUZZLE = "🧩"
     WAVE = "🌊"
     BOOKS_STACK = "📚"
+    CHAINS = "⛓️"
     SQUARE_ACADEMIC_CAP = "🎓"
     BIOHAZARD = "☣"
     SCALES = "⚖"
+    CHAIN_SEPARATOR = "⫘⫘⫘"
+    CUBE = "💠"
 
 
 def create_progress_text(

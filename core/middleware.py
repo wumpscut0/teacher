@@ -1,4 +1,4 @@
-from typing import Any, Dict, Callable, Awaitable
+from typing import Any, Dict, Callable, Awaitable, Type
 
 from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
@@ -14,9 +14,11 @@ class BuildBotControl(BaseMiddleware):
             self,
             bot: Bot,
             bot_storage: DictStorage,
+            bot_control_schema: Type[BotControl]
     ):
         self._bot = bot
         self._bot_storage = bot_storage
+        self._bot_control_schema = bot_control_schema
 
     async def __call__(
             self,
@@ -33,7 +35,7 @@ class BuildBotControl(BaseMiddleware):
             raise e
 
     async def _build_bot_control(self, event, state: FSMContext):
-        bot_control = BotControl(
+        bot_control = self._bot_control_schema(
             bot=self._bot,
             chat_id=str(await self._extract_chat_id(event)),
             state=state,
