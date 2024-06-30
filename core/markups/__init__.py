@@ -193,6 +193,7 @@ class WindowBuilder(
             text_map: list[DataTextWidget | TextWidget] | None = None,
             keyboard_map: list[list[ButtonWidget]] | None = None,
             backable: bool = True,
+            back_callback_data: str = "back",
             back_text: str = Emoji.BACK,
             left_text: str = Emoji.LEFT,
             left_mark: str = "",
@@ -203,24 +204,6 @@ class WindowBuilder(
             page: int = 0,
             data: list[ButtonWidget] = None,
     ):
-        """
-        :param unique: True mean no additional layers per chat
-        :param type_: type message in telegram
-        :param state: User state when active that window
-        :param photo: will be show when active that window and type set as photo
-        :param voice: will be show when active that window and type set as voice
-        :param text_map: struct with text widgets
-        :param keyboard_map: struct with button widgets
-        :param backable: auto-adding back button with prepared handler
-        :param back_text: text in back button
-        :param left_text: text in left button
-        :param left_mark: mark in left button
-        :param right_text: text in right button
-        :param right_mark: mark in right button
-        :param size_page: quantity buttons per page
-        :param page: start page number
-        :param data: ButtonWidget array, will be parsed and if size_page > len(data) will be auto-added pagination
-        """
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
         self.frozen = frozen
@@ -240,7 +223,7 @@ class WindowBuilder(
         self._voice = voice
         self.left = ButtonWidget(text=left_text, mark=left_mark, sep="", callback_data="flip_left")
         self.right = ButtonWidget(text=right_text, mark=right_mark, sep="", callback_data="flip_right")
-        self.back = ButtonWidget(text=back_text, callback_data="back")
+        self.back = ButtonWidget(text=back_text, callback_data=back_callback_data)
         if self.type not in self._available_types:
             raise ValueError(f"Available type is {self._available_types} not {self.type}")
 

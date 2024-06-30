@@ -4,7 +4,8 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from core import BotControl, Info
+from core import BotControl
+from core.markups import Info
 from tools import Emoji
 
 abyss_router = Router()
@@ -17,14 +18,14 @@ async def back(message: Message, bot_control: BotControl):
 
 @abyss_router.callback_query(F.data == "flip_left")
 async def flip_left(message: Message, bot_control: BotControl):
-    markup = bot_control.current
+    markup = await bot_control.current()
     markup.page -= 1
     await bot_control.set_current(markup)
 
 
 @abyss_router.callback_query(F.data == "flip_right")
 async def flip_right(message: Message, bot_control: BotControl):
-    markup = bot_control.current
+    markup = await bot_control.current()
     markup.page += 1
     await bot_control.set_current(markup)
 
@@ -64,4 +65,3 @@ async def message_abyss(message: Message, bot_control: BotControl):
         await bot_control.clear_chat(force=True)
         await bot_control.push()
         return
-    # await bot_control.append(Info(f"Your message was eaten by the abyss {Emoji.ABYSS}"))

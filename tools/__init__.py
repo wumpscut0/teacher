@@ -1,14 +1,15 @@
-from base64 import b64decode, b64encode
+from asyncio import to_thread
 from os import getenv
 from math import ceil
 from pickle import dumps, loads
-from typing import Union, Any, List, Set, Iterable
+from typing import Union, Any, Iterable
 
 from dotenv import find_dotenv, load_dotenv
-from redis import Redis
+from redis.asyncio import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
 
+from tools.loggers import debug_tools, info_tools, errors_tools
 
 load_dotenv(find_dotenv())
 
@@ -112,6 +113,7 @@ class Emoji:
     BOX = "📦"
     DNA = "🧬"
     FLASK = "🧪"
+    DARK_START = "★"
     BROKEN_ROSE = "🥀"
     HYGEUM = "⚕"
     WRITING_HAND = "✍"
@@ -127,13 +129,12 @@ class Emoji:
     PUZZLE = "🧩"
     WAVE = "🌊"
     BOOKS_STACK = "📚"
+    CHAINS = "⛓️"
     SQUARE_ACADEMIC_CAP = "🎓"
     BIOHAZARD = "☣"
-    BIOHAZARD_2 = "☣️"
-    BIOHAZARD_3 = "☣"
     SCALES = "⚖"
-    SCALES_2 = "⚖️"
-    DOWN_ARROW = "⬇"
+    CHAIN_SEPARATOR = "⫘⫘⫘"
+    CUBE = "💠"
 
 
 def create_progress_text(
@@ -161,17 +162,8 @@ def create_progress_text(
     return progress
 
 
-class SerializableMixin:
-    async def serialize(self):
-        return b64encode(dumps(self)).decode()
-
-
-async def deserialize(sequence: str):
-    return loads(b64decode(sequence.encode()))
-
-
 class CustomRedis(Redis):
-    def set(
+    async def set(
         self,
         name: KeyT,
         value: Any,
@@ -184,7 +176,7 @@ class CustomRedis(Redis):
         exat: Union[AbsExpiryT, None] = None,
         pxat: Union[AbsExpiryT, None] = None,
     ) -> ResponseT:
-        return super().set(
+        return await super().set(
             name,
             dumps(value),
             ex,
@@ -197,19 +189,19 @@ class CustomRedis(Redis):
             pxat,
         )
 
-    def get(self, name: KeyT) -> ResponseT:
-        result: Any = super().get(name)
+    async def get(self, name: KeyT) -> ResponseT:
+        result: Any = await super().get(name)
         if result is not None:
-            return loads(result)
+            return await to_thread(loads, result)
 
-    def setex(self, name: KeyT, time: ExpiryT, value: Any) -> ResponseT:
-        return super().setex(
+    async def setex(self, name: KeyT, time: ExpiryT, value: Any) -> ResponseT:
+        return await super().setex(
             name,
             time,
             dumps(value),
         )
 
-    def getex(
+    async def getex(
         self,
         name: KeyT,
         ex: Union[ExpiryT, None] = None,
@@ -218,122 +210,121 @@ class CustomRedis(Redis):
         pxat: Union[AbsExpiryT, None] = None,
         persist: bool = False,
     ) -> ResponseT:
-        result: Any = super().getex(name, ex, px, exat, pxat, persist)
+        result: Any = await super().getex(name, ex, px, exat, pxat, persist)
         if result is not None:
-            return loads(result)
+            return await to_thread(loads, result)
 
 
 class Storage:
-    STORAGE = CustomRedis(
+    CLIENT = CustomRedis(
         host=getenv("REDIS_HOST"), port=int(getenv("REDIS_PORT")), db=1
     )
 
-    def __init__(self, key: str = ""):
+    def __init__(self, key: str, default: Any):
         self._key = key
+        self._default = default
 
-    def _get(self, default: Any | None = None):
+    async def get(self):
         try:
-            value = self.STORAGE.get(self._key)
-            print(f"GET key: {self._key} ; value: {value}")
+            value = await self.CLIENT.get(self._key)
+            debug_tools.debug(f"GET key: {self._key} -> value: {value}")
         except (AttributeError, ModuleNotFoundError, Exception):
-            print(f"Impossible restore broken deserialized data\nKey: {self._key}")
-            self._set(default)
-            return default
+            errors_tools.error(f"Impossible restore broken deserialized data\nKey: {self._key}")
+            await self.set(self._default)
+            return self._default
         if value is None:
-            return default
+            return self._default
         return value
 
-    def _set(self, value: Any):
-        # print(f"SET key: {self._key} ; value: {value}")
-        self.STORAGE.set(self._key, value)
+    async def set(self, value: Any, save_data_in_log: bool = True):
+        if save_data_in_log:
+            debug_tools.debug(f"SET value: {await self.get()} by key: {self._key} -> value: {value}")
+        else:
+            debug_tools.debug(f"SET key: {self._key} -> value: {value}")
+        await self.CLIENT.set(self._key, value)
 
-    def destroy(self):
-        self.STORAGE.set(self._key, None)
+    async def destroy(self, save_data_in_log: bool = True):
+        if save_data_in_log:
+            data = await self.CLIENT.get(self._key)
+            await self.CLIENT.set(self._key, None)
+            info_tools.info(f"Data: {data} removed from key: {self._key} ")
+        else:
+            await self.CLIENT.set(self._key, None)
+            info_tools.info(f"Data by key: {self._key} destroyed")
 
 
-class ImmuneDict(Storage):
-    def __init__(self, id_: str | int = "common_dict"):
-        super().__init__(id_)
+class DictStorage(Storage):
+    def __init__(self, id_: str):
+        super().__init__(id_, {})
 
-    def __getitem__(self, key: str):
-        return self._get({})[key]
-
-    def __setitem__(self, key: str, value: Any):
-        dict_ = self._get({})
-        dict_[key] = value
-        self._set(dict_)
-
-    def get(self, key: str, default: Any | None = None):
+    async def get_value_by_key(self, key: str, default: Any | None = None):
         try:
-            return self._get({})[key]
+            return (await self.get())[key]
         except KeyError:
             return default
 
+    async def set_value_by_key(self, key: str, value):
+        user_storage = await self.get()
+        user_storage[key] = value
+        await self.set(user_storage)
 
-class ImmuneList(Storage):
-    def __init__(self, id_: str | int = "common_list"):
-        super().__init__(id_)
+    async def destroy_key(self, key: str):
+        try:
+            user_storage = await self.get()
+            user_storage.pop(key)
+            await self.set(user_storage)
+            return True
+        except KeyError:
+            return False
 
-    @property
-    def list(self) -> List[Any]:
-        return self._get([])
 
-    def __getitem__(self, index: int):
-        return self.list[index]
+class ListStorage(Storage):
+    def __init__(self, key: str):
+        super().__init__(key, [])
 
-    @list.setter
-    def list(self, list_: List[Any]):
-        self._set(list_)
-
-    def __setitem__(self, index: int, value: Any):
-        list_ = self.list
-        list_[index] = value
-        self.list = list_
-
-    def append(self, item: Any):
-        list_ = self.list
+    async def append(self, item: Any):
+        list_ = await self.get()
         list_.append(item)
-        self.list = list_
+        await self.set(list_)
 
-    def extend(self, items: Iterable):
-        list_ = self.list
+    async def extend(self, items: Iterable):
+        list_ = await self.get()
         list_.extend(items)
-        self.list = list_
+        await self.set(list_)
 
-    def pop_last(self):
-        list_ = self.list
+    async def pop_last(self):
+        list_ = await self.get()
         if not list_:
             return
         item = list_.pop()
-        self.list = list_
+        await self.set(list_)
         return item
 
-    def reset(self, item: Any):
-        self.list = [item]
+    async def reset(self, item: Any):
+        await self.set([item])
 
-    def remove(self, message_id: int):
-        list_ = self.list
+    async def remove(self, message_id: int):
+        list_ = await self.get()
         try:
             list_.remove(message_id)
-            self.list = list_
+            await self.set(list_)
             return True
         except ValueError:
             return False
 
+    async def reset_last(self, item: Any):
+        list_ = await self.get()
+        if not list_:
+            await self.reset(item)
+        else:
+            list_[-1] = item
+            await self.set(list_)
 
-class ImmuneSet(Storage):
-    def __init__(self, id_: str | int = "common_set"):
-        super().__init__(id_)
+    async def get_last(self):
+        try:
+            return (await self.get())[-1]
+        except IndexError:
+            return
 
-    @property
-    def set(self) -> Set:
-        return self._get(set())
-
-    def add(self, item: Any):
-        set_ = self.set
-        set_.add(item)
-        self.set = set_
-
-    @set.setter
-    def set(self, set_: Set):
-        self._set(set_)
+    async def get_all_except_last(self):
+        return (await self.get())[:-1]
