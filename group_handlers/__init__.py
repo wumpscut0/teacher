@@ -9,11 +9,6 @@ from tools import Emoji
 party_router = Routers.group()
 
 
-@party_router.callback_query(F.data == "exit")
-async def get_offer(callback: CallbackQuery, bot_control: BotControl):
-    await bot_control.clear_chat(force=True)
-
-
 @party_router.callback_query(F.data == "get_offer")
 async def get_offer(callback: CallbackQuery, bot_control: BotControl):
     offer = await bot_control.bot_storage.get_value_by_key("offer", set())

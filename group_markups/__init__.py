@@ -19,7 +19,7 @@ class GroupPartyTitleScreen(WindowBuilder):
                 ButtonWidget(text=f"Edit English Run {Emoji.GLOBE_WITH_MERIDIANS}", callback_data="edit_english_run")
             ],
             [
-                ButtonWidget(text="Tuurngaid, you can go", callback_data="exit")
+                ButtonWidget(text=f"Add content {Emoji.COLORS}", callback_data="add_content")
             ]
         ]
 

@@ -63,6 +63,7 @@ class Emoji:
     MOYAI = "🗿"
     CLOWN = "🤡"
     WHEELCHAIR = "♿️"
+    COLORS = "🎨"
     CRYING_CAT = "😿"
     LEFT = "⬅"
     RIGHT = "➡"
