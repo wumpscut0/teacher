@@ -118,27 +118,30 @@ class BotControl:
     async def set_group_title_screen(self, group_title_screen: WindowBuilder):
         return await self.bot_storage.set_value_by_key("group_title_screen", group_title_screen)
 
-    async def extend(self, *markups_: WindowBuilder):
-        names = [i.__class__.__name__ for i in await self._context.get()]
-        to_extend = []
-        for markup in markups_:
-            if markup.unique and markup.__class__.__name__ in names:
-                continue
-            to_extend.append(markup)
-
-        await self._context.extend(to_extend)
-        await self.push()
+    # async def extend(self, *markups_: WindowBuilder):
+    #     names = [i.__class__.__name__ for i in await self._context.get()]
+    #     to_extend = []
+    #     for markup in markups_:
+    #         if markup.unique and markup.__class__.__name__ in names:
+    #             continue
+    #         to_extend.append(markup)
+    #
+    #     await self._context.extend(to_extend)
+    #     await self.push()
 
     async def append(self, markup: WindowBuilder):
         if markup.unique and markup.__class__.__name__ in (i.__class__.__name__ for i in await self._context.get()):
-            await self.push()
+            await self.update_chat(markup)
         else:
-            await self._context.append(markup)
-            await self.push()
+            if await self.update_chat(markup):
+                await self._context.append(markup)
 
     async def back(self):
+        await self.pop_last()
+        await self.update_chat(await self._context.get_last())
+
+    async def pop_last(self):
         await self._context.pop_last()
-        await self.push()
 
     async def reset(self):
         if self.chat_id.startswith("-"):
@@ -159,7 +162,7 @@ class BotControl:
 
     async def current(self):
         """
-        :return: if not frozen, return last added window builder without text_map and keyboard_map
+        :return: if not frozen, return last appended window builder without text_map and keyboard_map
         """
         markup = await self._context.get_last()
         if markup is None:
@@ -170,8 +173,8 @@ class BotControl:
         return markup
 
     async def set_current(self, markup: WindowBuilder):
-        await self._context.reset_last(markup)
-        await self.push()
+        if await self.update_chat(markup):
+            await self._context.reset_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):
         try:
@@ -191,8 +194,7 @@ class BotControl:
         last_message_id = (await self._messages_ids.get_last())
         if last_message_id is None:
             await self._create_text_message(markup)
-            return
-
+            return True
         try:
             await self._bot.edit_message_text(
                 chat_id=self.chat_id,
@@ -200,12 +202,13 @@ class BotControl:
                 text=markup.as_html,
                 reply_markup=markup.keyboard,
             )
+            return True
         except TelegramBadRequest as e:
             if "not modified" in e.message:
-                return
+                return False
             else:
                 await self._delete_message(last_message_id)
-                await self._update_message[markup.type](markup)
+                return await self._update_message[markup.type](markup)
 
     async def _create_photo_message(self, markup: WindowBuilder):
         try:
@@ -226,7 +229,7 @@ class BotControl:
         last_message_id = (await self._messages_ids.get_last())
         if last_message_id is None:
             await self._create_photo_message(markup)
-            return
+            return True
 
         try:
             await self._bot.edit_message_media(
@@ -240,13 +243,14 @@ class BotControl:
                 caption="" if markup.as_html == "No Data" else markup.as_html,
                 reply_markup=markup.keyboard
             )
+            return True
         except TelegramBadRequest as e:
             await self._delete_message(last_message_id)
             if "not modified" in e.message:
-                return
+                return False
             else:
                 await self._delete_message(last_message_id)
-                await self._update_message[markup.type](markup)
+                return await self._update_message[markup.type](markup)
 
     async def _create_voice_message(self, markup: WindowBuilder):
         try:
@@ -267,7 +271,7 @@ class BotControl:
         last_message_id = (await self._messages_ids.get_last())
         if last_message_id is None:
             await self._create_voice_message(markup)
-            return
+            return True
         try:
             await self._bot.edit_message_media(
                 chat_id=self.chat_id,
@@ -280,12 +284,13 @@ class BotControl:
                 caption="" if markup.as_html == "No Data" else markup.as_html,
                 reply_markup=markup.keyboard
             )
+            return True
         except TelegramBadRequest as e:
             if "not modified" in e.message:
-                return
+                return False
             else:
                 await self._delete_message(last_message_id)
-                await self._update_message[markup.type](markup)
+                return await self._update_message[markup.type](markup)
 
     async def _init_markup(self, markup: WindowBuilder):
         await self._state.set_state(markup.state)
@@ -298,19 +303,18 @@ class BotControl:
         if not markup.back_inited:
             markup.init_control()
 
-    async def push(self, force=False):
+    async def update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
         await self.clear_chat(force)
         try:
-            markup = await self._context.get_last()
             if markup is None:
-                raise IndexError
-            await self._init_markup(markup)
+                await self.reset()
+            else:
+                await self._init_markup(markup)
+                return await self._update_message[markup.type](markup)
         except (IndexError, AttributeError, Exception):
             errors_alt_telegram.error(f"Impossible build markup", exc_info=True)
             await self.reset()
-            return
-
-        await self._update_message[markup.type](markup)
+            return False
 
     async def clear_chat(self, force: bool = False):
         if force:

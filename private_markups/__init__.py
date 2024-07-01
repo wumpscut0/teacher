@@ -62,7 +62,7 @@ class English(WindowBuilder):
     def __init__(self, deck: List[WordCard], knowledge: Dict):
         super().__init__(
             state=States.input_text_word_translate,
-            back_callback_data="result_english_run",
+            back_callback_data="request_to_flush_run",
             back_text=f"Flush Run {Emoji.WAVE}"
         )
         self._deck = deck
@@ -150,7 +150,7 @@ class English(WindowBuilder):
 
     def _calc_default_en_ru(self, answer: str):
         correct_answers = list(map(lambda x: x.strip().lower(), self.current_card.answer))
-        user_answers = set(map(lambda x: x.strip().lower().strip().translate(self._cleaner), answer.split(",")))
+        user_answers = set(map(lambda x: x.strip().lower().translate(self._cleaner), answer.split()))
 
         user_correct_answers = [user_answer for user_answer in user_answers if user_answer in correct_answers]
 

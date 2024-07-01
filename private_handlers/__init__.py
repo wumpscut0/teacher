@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery, Message
 
 from FSM import States
 from api import SuperEnglishDictionary
-from core.markups import Info
+from core.markups import Info, Conform
 
 from core import BotControl, Routers
 from private_markups import English, InspectEnglishRun, BanWordCallbackData
@@ -82,8 +82,18 @@ async def draw_card(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.set_current(english)
 
 
-@english_router.callback_query(F.data == "result_english_run")
+@english_router.callback_query(F.data == "request_to_flush_run")
 async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
+    await bot_control.append(Conform(f"Do you really want to flush current run?\n"
+                                     f"(All data will be save {Emoji.FLOPPY_DISC})",
+                                     yes_callback_data="flush_run",
+                                     yes_text=f"Yes {Emoji.WAVE}", no_text=f"Continue {Emoji.RIGHT}"
+                                     ))
+
+
+@english_router.callback_query(F.data == "flush_run")
+async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
+    await bot_control.pop_last()
     english: English = await bot_control.current()
     english.result()
     await bot_control.set_current(english)

@@ -86,7 +86,7 @@ class SuperEnglishDictionary:
                 word,
                 translates,
                 "default:en-ru",
-                f"Give all possible translations, comma-separated, of the word",
+                f"Give all possible translations, spaces-separated, of the word",
                 knowledge_schema
             ))
             cards.append(WordCard(

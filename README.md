@@ -1,1 +1,0 @@
-each custom method in WindowBuilder is interface in one time
