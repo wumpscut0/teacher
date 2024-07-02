@@ -1,5 +1,4 @@
-import os.path
-from typing import List, Literal, Any, Iterable, TypeVar
+from typing import List, Literal, Any, Iterable, TypeVar, Tuple
 
 from aiogram.types import FSInputFile
 from aiogram.utils.formatting import as_list, Text, Bold, Italic
@@ -180,42 +179,64 @@ class WindowBuilder(
     KeyboardMarkupConstructor
 ):
     _available_types = "text", "photo", "audio"
+    _no_photo = "AgACAgIAAx0Cf42o9wACA1pmg-PfOMzziFicxV7itfg34ZbwawACsN8xG3rTIEj3ZE18dVVwmQEAAwIAA20AAzUE"
+    _no_audio = 'CQACAgIAAx0Cf42o9wACA11mg-WsuShax7eXPExHO9EEbPg1EgACrFIAAnrTIEiM_mvZKw3k1TUE'
 
     def __init__(
             self,
             *,
+            init_schema: Tuple[str] = (
+                "frozen_text",
+                "paginated_buttons",
+                "frozen_buttons",
+                "pagination",
+                "back"
+            ),
             unique: bool = False,
-            frozen: bool = False,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
             voice: str | FSInputFile | None = None,
             text_map: list[DataTextWidget | TextWidget] | None = None,
             keyboard_map: list[list[ButtonWidget]] | None = None,
-            backable: bool = True,
+            frozen_buttons_map: list[list[ButtonWidget]] | None = None,
+            paginated_buttons: list[ButtonWidget] = None,
+            frozen_text_map: list[TextWidget | DataTextWidget] | None = None,
+            auto_back: bool = True,
             back_callback_data: str = "back",
             back_text: str = Emoji.BACK,
             left_text: str = Emoji.LEFT,
             left_mark: str = "",
             right_text: str = Emoji.RIGHT,
             right_mark: str = "",
-            size_page: int = 10,
+            buttons_per_page: int = 10,
             buttons_per_line: int = 1,
             page: int = 0,
-            data: list[ButtonWidget] = None,
     ):
         TextMarkupConstructor.__init__(self, text_map)
         KeyboardMarkupConstructor.__init__(self, keyboard_map)
-        self.frozen = frozen
+        self._init_map = {
+            "frozen_text": self._init_frozen_text_map,
+            "paginated_buttons": self._init_paginated_buttons,
+            "frozen_buttons": self._init_frozen_buttons_map,
+            "pagination": self._init_pagination,
+            "back": self._init_back,
+        }
+        self.init_schema = init_schema
+        self.frozen_text_map = frozen_text_map
+        self.frozen_buttons_map = frozen_buttons_map
         self.unique = unique
-        self.back_inited = False
-        self.pagination_inited = False
-        self.extra_inited = False
-        self.data = [] if data is None else data
-        self._size_page = size_page
+
+        self._frozen_text_map_inited = False
+        self._paginated_buttons_inited = False
+        self._frozen_buttons_map_inited = False
+        self._pagination_inited = False
+        self._back_inited = False
+
+        self.paginated_buttons = [] if paginated_buttons is None else paginated_buttons
+        self._size_page = buttons_per_page
         self.buttons_per_line = buttons_per_line
-        self._partitioned_data = self.split(size_page, self.data)
-        self.backable = backable
+        self.backable = auto_back
         self.page = page
         self.type = type_
         self.state = state
@@ -229,32 +250,53 @@ class WindowBuilder(
 
     @property
     def partitioned_data(self) -> List[Any]:
-        return self._partitioned_data[self.page % len(self._partitioned_data)]
+        partitioned_data = self.split(self._size_page, self.paginated_buttons)
+        return partitioned_data[self.page % len(partitioned_data)]
 
-    @partitioned_data.setter
-    def partitioned_data(self, partitioned_data: List[Any]):
-        self._partitioned_data[self.page % len(self._partitioned_data)] = partitioned_data
+    def init(self):
+        for display_name in self.init_schema:
+            self._init_map[display_name]()
 
-    def init_pagination(self):
-        if len(self._partitioned_data) > 1:
+    def _init_frozen_text_map(self):
+        if not self._frozen_text_map_inited and self.frozen_text_map:
+            self.add_texts_rows(*self.frozen_text_map)
+            self._frozen_text_map_inited = True
+
+    def _init_paginated_buttons(self):
+        if not self._paginated_buttons_inited and self.partitioned_data:
+            for row in self.split(self.buttons_per_line, self.partitioned_data):
+                self.add_buttons_in_new_row(*row)
+            self._paginated_buttons_inited = True
+
+    def _init_frozen_buttons_map(self):
+        if not self._frozen_buttons_map_inited and self.frozen_buttons_map:
+            for row in self.frozen_buttons_map:
+                self.add_buttons_in_new_row(*row)
+            self._frozen_buttons_map_inited = True
+
+    def _init_pagination(self):
+        if not self._pagination_inited and len(self.split(self._size_page, self.paginated_buttons)) > 1:
             self.add_buttons_in_new_row(self.left, self.right)
-            self.pagination_inited = True
+            self._pagination_inited = True
 
-    def init_control(self):
-        if self.backable:
+    def _init_back(self):
+        if not self._back_inited and self.backable:
             self.add_buttons_in_new_row(self.back)
-            self.back_inited = True
+            self._back_inited = True
 
     def reset(self):
         self.text_map = []
         self.keyboard_map = [[]]
-        self.back_inited = False
-        self.pagination_inited = False
+        self._frozen_text_map_inited = False
+        self._paginated_buttons_inited = False
+        self._frozen_buttons_map_inited = False
+        self._pagination_inited = False
+        self._back_inited = False
 
     @property
     def voice(self):
         if self._voice is None:
-            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_audio.ogg"))
+            return self._no_audio
         return self._voice
 
     @voice.setter
@@ -264,7 +306,7 @@ class WindowBuilder(
     @property
     def photo(self):
         if not self._photo:
-            return FSInputFile(os.path.join(os.path.dirname(__file__), "no_photo.jpg"))
+            return self._no_photo
         return self._photo
 
     @photo.setter
@@ -283,6 +325,10 @@ class WindowBuilder(
         lines.append(line)
         return lines
 
+    def back_as_cancel(self):
+        self.back.text = f"{Emoji.DENIAL} Cancel"
+        self.back.callback_data = "back"
+
 
 class Info(WindowBuilder):
     def __init__(
@@ -299,7 +345,7 @@ class Temp(WindowBuilder):
         self,
         text: str = f"{Emoji.HOURGLASS_START} Processing...",
     ):
-        super().__init__(backable=False)
+        super().__init__(auto_back=False)
         self.add_texts_rows(TextWidget(text=text))
 
 
@@ -324,7 +370,7 @@ class Conform(WindowBuilder):
         yes_text: str = f"{Emoji.OK} Yes",
         no_text: str = f"{Emoji.DENIAL} No",
     ):
-        super().__init__(back_text=no_text, backable=False)
+        super().__init__(back_text=no_text, auto_back=False)
         self.add_texts_rows(TextWidget(text=prompt))
         self.add_buttons_in_new_row(
             ButtonWidget(text=yes_text, callback_data=yes_callback_data),

@@ -19,6 +19,7 @@ async def back(message: Message, bot_control: BotControl):
 @abyss_router.callback_query(F.data == "flip_left")
 async def flip_left(message: Message, bot_control: BotControl):
     markup = await bot_control.current()
+    markup.reset()
     markup.page -= 1
     await bot_control.set_current(markup)
 
@@ -41,12 +42,14 @@ async def wrong_type_message_abyss(message: Message, bot_control: BotControl, st
         await message.delete()
     except TelegramBadRequest:
         await bot_control.clear_chat(force=True)
-        await bot_control.push()
+        await bot_control.refresh()
 
     state_name = await state.get_state()
     guess = ""
     if "text" in state_name:
         guess = "text"
+    elif "integer" in state_name:
+        guess = "integer"
     elif "photo" in state_name:
         guess = "photo"
 
@@ -59,9 +62,19 @@ async def wrong_type_message_abyss(message: Message, bot_control: BotControl, st
 
 @abyss_router.message()
 async def message_abyss(message: Message, bot_control: BotControl):
+    if message.photo:
+        for photo in message.photo:
+            print(f"Photo: {photo.file_id} {message.photo}")
+    elif message.video:
+        print(f"Video: {message.video.file_id} {message.video}")
+    elif message.voice:
+        print(f"Voice: {message.voice.file_id} {message.voice}")
+    elif message.audio:
+        print(f"Audio: {message.audio.file_id} {message.audio}")
+
     try:
         await message.delete()
     except TelegramBadRequest:
         await bot_control.clear_chat(force=True)
-        await bot_control.push()
+        await bot_control.refresh()
         return

@@ -110,8 +110,9 @@ async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
     words_ = []
     for word in words:
         data = await SuperEnglishDictionary.extract_data(word)
-        knowledge_size = len(SuperEnglishDictionary.build_knowledge_schema(data))
-        words_.append((word, knowledge_size))
+        if data["pos"]:
+            knowledge_size = len(SuperEnglishDictionary.build_knowledge_schema(data))
+            words_.append((word, knowledge_size))
 
     knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
     ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
@@ -122,11 +123,11 @@ async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
 async def baning_words(callback: CallbackQuery, callback_data: BanWordCallbackData, bot_control: BotControl):
     markup = await bot_control.current()
     ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
-    if markup.data[callback_data.index].mark == Emoji.OK:
-        markup.data[callback_data.index].mark = Emoji.DENIAL
+    if markup.paginated_buttons[callback_data.index].mark == Emoji.OK:
+        markup.paginated_buttons[callback_data.index].mark = Emoji.DENIAL
         ban_list.add(callback_data.word)
     else:
-        markup.data[callback_data.index].mark = Emoji.OK
+        markup.paginated_buttons[callback_data.index].mark = Emoji.OK
         ban_list.remove(callback_data.word)
     await bot_control.user_storage.set_value_by_key("english:ban_list", ban_list)
     await bot_control.set_current(markup)
@@ -137,7 +138,7 @@ async def ban_all(callback: CallbackQuery, bot_control: BotControl):
     markup = await bot_control.current()
     words = await bot_control.bot_storage.get_value_by_key("words")
     await bot_control.user_storage.set_value_by_key("english:ban_list", set(words))
-    for button in markup.data:
+    for button in markup.paginated_buttons:
         button.mark = Emoji.DENIAL
     await bot_control.set_current(markup)
 
@@ -146,6 +147,6 @@ async def ban_all(callback: CallbackQuery, bot_control: BotControl):
 async def unban_all(callback: CallbackQuery, bot_control: BotControl):
     markup = await bot_control.current()
     await bot_control.user_storage.destroy_key("english:ban_list")
-    for button in markup.data:
+    for button in markup.paginated_buttons:
         button.mark = Emoji.OK
     await bot_control.set_current(markup)

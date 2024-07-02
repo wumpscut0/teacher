@@ -26,7 +26,7 @@ dictConfig(
         "loggers": {
             "errors_tools": {"level": logging.ERROR, "handlers": ["errors"]},
             "info_tools": {"level": logging.INFO, "handlers": ["info"]},
-            "debug_tools": {"level": logging.DEBUG, "handlers": ["debug"]},
+            "debug_tools": {"level": logging.CRITICAL, "handlers": ["debug"]},
         },
     }
 )

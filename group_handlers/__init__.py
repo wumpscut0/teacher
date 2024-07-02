@@ -34,10 +34,10 @@ async def edit_english_run(callback: CallbackQuery, bot_control: BotControl):
 @party_router.callback_query(WordTickCallbackData.filter())
 async def marking_words(callback: CallbackQuery, callback_data: WordTickCallbackData, bot_control: BotControl):
     markup = await bot_control.current()
-    if markup.data[callback_data.index].mark == Emoji.OK:
-        markup.data[callback_data.index].mark = Emoji.DENIAL
+    if markup.paginated_buttons[callback_data.index].mark == Emoji.OK:
+        markup.paginated_buttons[callback_data.index].mark = Emoji.DENIAL
     else:
-        markup.data[callback_data.index].mark = Emoji.OK
+        markup.paginated_buttons[callback_data.index].mark = Emoji.OK
 
     await bot_control.set_current(markup)
 
@@ -46,7 +46,7 @@ async def marking_words(callback: CallbackQuery, callback_data: WordTickCallback
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
     markup = await bot_control.current()
     words = await bot_control.bot_storage.get_value_by_key("words", set())
-    for word in (word.text for word in markup.data if word.mark == Emoji.DENIAL):
+    for word in (word.text for word in markup.paginated_buttons if word.mark == Emoji.DENIAL):
         words.remove(word)
     await bot_control.bot_storage.set_value_by_key("words", words)
     await bot_control.back()
@@ -58,7 +58,7 @@ async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
 
     words = await bot_control.bot_storage.get_value_by_key("words", set())
 
-    for word_button in markup.data:
+    for word_button in markup.paginated_buttons:
         if word_button.mark == Emoji.OK:
             words.add(word_button.text)
 
@@ -71,3 +71,5 @@ async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
 async def drop_offer(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.bot_storage.destroy_key("offer")
     await bot_control.back()
+
+

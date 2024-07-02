@@ -1,6 +1,4 @@
 from os import getenv
-from asyncio import to_thread
-from copy import deepcopy
 from datetime import datetime, timedelta
 
 from aiogram.filters import Command
@@ -131,34 +129,32 @@ class BotControl:
 
     async def append(self, markup: WindowBuilder):
         if markup.unique and markup.__class__.__name__ in (i.__class__.__name__ for i in await self._context.get()):
-            await self.update_chat(markup)
+            await self._update_chat(markup)
         else:
-            if await self.update_chat(markup):
+            if await self._update_chat(markup):
                 await self._context.append(markup)
 
     async def back(self):
         await self.pop_last()
-        await self.update_chat(await self._context.get_last())
+        await self._update_chat(await self._context.get_last())
 
     async def pop_last(self):
         await self._context.pop_last()
 
+    async def refresh(self):
+        await self._update_chat(await self._context.get_last())
+
     async def reset(self):
+        await self._context.destroy()
+        for message_id in await self._messages_ids.get():
+            await self._delete_message(message_id)
+        await self._messages_ids.destroy()
+
         if self.chat_id.startswith("-"):
             markup = await self.get_group_title_screen()
         else:
             markup = await self.get_private_title_screen()
-
-        await self._init_markup(markup)
-
-        await self._context.destroy()
-
-        for message_id in await self._messages_ids.get():
-            await self._delete_message(message_id)
-
-        await self._messages_ids.destroy()
-
-        await self._update_message[markup.type](markup)
+        await self._update_chat(markup)
 
     async def current(self):
         """
@@ -167,13 +163,11 @@ class BotControl:
         markup = await self._context.get_last()
         if markup is None:
             return
-        if markup.frozen:
-            return markup
         markup.reset()
         return markup
 
     async def set_current(self, markup: WindowBuilder):
-        if await self.update_chat(markup):
+        if await self._update_chat(markup):
             await self._context.reset_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):
@@ -292,24 +286,14 @@ class BotControl:
                 await self._delete_message(last_message_id)
                 return await self._update_message[markup.type](markup)
 
-    async def _init_markup(self, markup: WindowBuilder):
-        await self._state.set_state(markup.state)
-        custom_keyboard_map = deepcopy(markup.keyboard_map)
-        markup.keyboard_map = await to_thread(markup.split, markup.buttons_per_line, markup.partitioned_data)
-        for row in custom_keyboard_map:
-            markup.add_buttons_in_new_row(*row)
-        if not markup.pagination_inited:
-            markup.init_pagination()
-        if not markup.back_inited:
-            markup.init_control()
-
-    async def update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
+    async def _update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
         await self.clear_chat(force)
         try:
             if markup is None:
                 await self.reset()
             else:
-                await self._init_markup(markup)
+                markup.init()
+                await self._state.set_state(markup.state)
                 return await self._update_message[markup.type](markup)
         except (IndexError, AttributeError, Exception):
             errors_alt_telegram.error(f"Impossible build markup", exc_info=True)

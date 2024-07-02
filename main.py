@@ -3,7 +3,9 @@ import os
 
 from core import BotControl, WindowBuilder
 from core.markups import TextWidget, DataTextWidget
+from group_handlers.shop import admin_shop_router
 from group_markups import GroupPartyTitleScreen
+from private_handlers.shop import private_shop_router
 from private_markups import PrivateTuurngaidTitleScreen, Greetings
 from core.dispatcher import BuildBot
 from group_handlers import party_router
@@ -28,6 +30,8 @@ async def main():
         commands_router,
         english_router,
         party_router,
+        admin_shop_router,
+        private_shop_router,
         token=os.getenv("TOKEN"),
         private_title_screen=PrivateTuurngaidTitleScreen(),
         group_title_screen=GroupPartyTitleScreen(),

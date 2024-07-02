@@ -8,7 +8,7 @@ from typing import Dict, List
 
 from aiohttp import ClientSession
 from core.loggers import info_alt_telegram, errors_alt_telegram, debug_alt_telegram
-from tools import DictStorage
+from tools import DictStorage, Emoji
 
 
 class WordCard:
@@ -119,6 +119,8 @@ class SuperEnglishDictionary:
                 "Translate",
                 knowledge_schema
             ))
+        if not cards:
+            info_alt_telegram.warning(f"{Emoji.WARNING} No cards for word {word}")
         return cards
 
     @classmethod
@@ -225,7 +227,7 @@ class SuperEnglishDictionary:
                     except KeyError:
                         info_alt_telegram.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
                 elif status == 404:
-                    info_alt_telegram.warning(f"No audio_and_examples for word {word}")
+                    info_alt_telegram.info(f"No audio_and_examples for word {word}")
                 else:
                     errors_alt_telegram.error(f"audio_and_examples API returned unexpected code {status}")
 
@@ -297,18 +299,18 @@ class SuperEnglishDictionary:
             if ts:
                 resume["ts"] = ts
             resume["pos"][pos.get("pos", "other")] = {
-                "tr": [],
-                "syn": [],
+                "tr": set(),
+                "syn": set(),
             }
-            for tr in pos.get("tr", []):
+            for tr in pos.get("tr", set()):
                 t = tr.get("text")
                 if t and all(True if sym not in string.ascii_letters else False for sym in t):
-                    resume["pos"][pos.get("pos", "other")]["tr"].append(t)
+                    resume["pos"][pos.get("pos", "other")]["tr"].add(t)
                 s = tr.get("mean", ())
                 if s:
-                    resume["pos"][pos.get("pos", "other")]["syn"].extend((mean["text"] for mean in s))
-            resume["pos"][pos.get("pos", "other")]["tr"] = list(set(resume["pos"][pos.get("pos", "other")]["tr"]))
-            resume["pos"][pos.get("pos", "other")]["syn"] = list(set(resume["pos"][pos.get("pos", "other")]["syn"]))
+                    for mean in s:
+                        resume["pos"][pos.get("pos", "other")]["syn"].add(mean["text"])
+
         empty_keys = []
         for pos in resume["pos"]:
             if all((not i for i in resume["pos"][pos].values())):
