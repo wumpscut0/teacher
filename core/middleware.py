@@ -14,10 +14,12 @@ class BuildBotControl(BaseMiddleware):
             self,
             bot: Bot,
             bot_storage: DictStorage,
+            set_up_storage: DictStorage,
             bot_control_schema: Type[BotControl]
     ):
         self._bot = bot
         self._bot_storage = bot_storage
+        self._set_up_storage = set_up_storage
         self._bot_control_schema = bot_control_schema
 
     async def __call__(
@@ -39,6 +41,7 @@ class BuildBotControl(BaseMiddleware):
             bot=self._bot,
             chat_id=str(await self._extract_chat_id(event)),
             state=state,
+            set_up_storage=self._set_up_storage,
             bot_storage=self._bot_storage,
             user_storage=DictStorage(f"{await self._extract_user_id(event)}:user_storage"),
         )

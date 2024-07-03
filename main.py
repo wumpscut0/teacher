@@ -2,15 +2,19 @@ import asyncio
 import os
 
 from core import BotControl, WindowBuilder
-from core.markups import TextWidget, DataTextWidget
-from group_handlers.shop import admin_shop_router
-from group_markups import GroupPartyTitleScreen
-from private_handlers.shop import private_shop_router
-from private_markups import PrivateTuurngaidTitleScreen, Greetings
+from core.markups import TextWidget
+from group import GroupTitleScreen
+from group.english import admin_english_router
+from group.shop import admin_shop_router
+from private import PrivateTitleScreen, Greetings
+from private.english import english_router
+
+from private.shop import private_shop_router
+
 from core.dispatcher import BuildBot
-from group_handlers import party_router
-from private_handlers import english_router
-from private_handlers.commands import commands_router, BotCommands
+
+
+from private.commands import commands_router, BotCommands
 from tools import Emoji
 
 
@@ -29,12 +33,12 @@ async def main():
     await BuildBot(
         commands_router,
         english_router,
-        party_router,
+        admin_english_router,
         admin_shop_router,
         private_shop_router,
         token=os.getenv("TOKEN"),
-        private_title_screen=PrivateTuurngaidTitleScreen(),
-        group_title_screen=GroupPartyTitleScreen(),
+        private_title_screen=PrivateTitleScreen(),
+        group_title_screen=GroupTitleScreen(),
         hello_screen=Greetings(),
         bot_control_schema=CustomBotControl
     ).start_polling(BotCommands.commands())

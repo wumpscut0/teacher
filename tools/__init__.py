@@ -96,8 +96,11 @@ class Emoji:
     SIGHT = "⊹"
     GUN = "▄︻テ══━一"
     FLOPPY_DISC = "💾"
+    CANDLE = "🕯️"
+    TAG = "🏷️"
     TICK = "✔️"
     SYNTH_MUSCLE = "🦾"
+    CONFETTI = "🎊"
     WHITE_BLACK_START = "✮"
     ABYSS = "🕳️"
     DIAGRAM_TOP = "📈"
@@ -108,7 +111,18 @@ class Emoji:
     CROWN = "🜲"
     MONKEY = "🦧"
     MUSCLE = "💪🏼"
-    ANIMALS = '🦊🐶🐱🦁🐯🐷🐮🐭🐹🐼🐨🐰🐻🦉🐥🐸🐙🦭'
+    FOX = "🦊"
+    DOG = "🐶"
+    CAT = "🐱"
+    LION = "🦁"
+    TIGER = "🐯"
+    PIG = "🐷"
+    COW = "🐮"
+    MOUSE = "🐭"
+    PANDA = "🐼"
+    RABBIT = "🐰"
+    CHICKEN = "🐥"
+    BEAR = "🐻"
     HOME = "🏠"
     WOMAN_MAN = "👫"
     CHILD = "👶"
@@ -119,6 +133,7 @@ class Emoji:
     DARK_START = "★"
     BROKEN_ROSE = "🥀"
     HYGEUM = "⚕"
+    PENCIL_2 = "✎"
     WRITING_HAND = "✍"
     UNIVERSE = "🌌"
     TALKING_HEAD = "🗣"
@@ -245,7 +260,7 @@ class Storage:
 
     async def set(self, value: Any, save_data_in_log: bool = True):
         if save_data_in_log:
-            debug_tools.debug(f"SET value: {await self.get()} by key: {self._key} -> value: {value}")
+            debug_tools.debug(f"SET {self._key} -> value: {value}")
         else:
             debug_tools.debug(f"SET key: {self._key} -> value: {value}")
         await self.CLIENT.set(self._key, value)

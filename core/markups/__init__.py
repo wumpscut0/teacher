@@ -137,11 +137,11 @@ class KeyboardMarkupConstructor:
             limitations_row = self._limitation_row
         for button in buttons:
             if len(self._keyboard_map[-1]) == limitations_row:
-                self.add_buttons_in_new_row(button)
+                self.add_buttons_as_new_row(button)
             else:
                 self._keyboard_map[-1].append(button)
 
-    def add_buttons_in_new_row(self, *buttons: ButtonWidget, only_emoji_text=False):
+    def add_buttons_as_new_row(self, *buttons: ButtonWidget, only_emoji_text=False):
         if only_emoji_text:
             limitations_row = self._limitation_row_with_emoji
         else:
@@ -151,14 +151,14 @@ class KeyboardMarkupConstructor:
         for button in buttons:
             if limit == limitations_row:
                 limit = 0
-                self.add_buttons_in_new_row(button)
+                self.add_buttons_as_new_row(button)
             else:
                 self.add_buttons_in_last_row(button, only_emoji_text=only_emoji_text)
             limit += 1
 
     def add_buttons_as_column(self, *buttons: ButtonWidget):
         for button in buttons:
-            self.add_buttons_in_new_row(button)
+            self.add_buttons_as_new_row(button)
 
     @property
     def keyboard(self):
@@ -197,10 +197,10 @@ class WindowBuilder(
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
             voice: str | FSInputFile | None = None,
-            text_map: list[DataTextWidget | TextWidget] | None = None,
-            keyboard_map: list[list[ButtonWidget]] | None = None,
+            temp_text_map: list[DataTextWidget | TextWidget] | None = None,
+            temp_keyboard_map: list[list[ButtonWidget]] | None = None,
             frozen_buttons_map: list[list[ButtonWidget]] | None = None,
-            paginated_buttons: list[ButtonWidget] = None,
+            paginated_buttons: list[ButtonWidget] | None = None,
             frozen_text_map: list[TextWidget | DataTextWidget] | None = None,
             auto_back: bool = True,
             back_callback_data: str = "back",
@@ -213,8 +213,8 @@ class WindowBuilder(
             buttons_per_line: int = 1,
             page: int = 0,
     ):
-        TextMarkupConstructor.__init__(self, text_map)
-        KeyboardMarkupConstructor.__init__(self, keyboard_map)
+        TextMarkupConstructor.__init__(self, temp_text_map)
+        KeyboardMarkupConstructor.__init__(self, temp_keyboard_map)
         self._init_map = {
             "frozen_text": self._init_frozen_text_map,
             "paginated_buttons": self._init_paginated_buttons,
@@ -223,8 +223,8 @@ class WindowBuilder(
             "back": self._init_back,
         }
         self.init_schema = init_schema
-        self.frozen_text_map = frozen_text_map
-        self.frozen_buttons_map = frozen_buttons_map
+        self.frozen_text = TextMarkupConstructor(frozen_text_map)
+        self.frozen_buttons = KeyboardMarkupConstructor(frozen_buttons_map)
         self.unique = unique
 
         self._frozen_text_map_inited = False
@@ -258,30 +258,30 @@ class WindowBuilder(
             self._init_map[display_name]()
 
     def _init_frozen_text_map(self):
-        if not self._frozen_text_map_inited and self.frozen_text_map:
-            self.add_texts_rows(*self.frozen_text_map)
+        if not self._frozen_text_map_inited:
+            self.add_texts_rows(*self.frozen_text.text_map)
             self._frozen_text_map_inited = True
 
     def _init_paginated_buttons(self):
-        if not self._paginated_buttons_inited and self.partitioned_data:
+        if not self._paginated_buttons_inited:
             for row in self.split(self.buttons_per_line, self.partitioned_data):
-                self.add_buttons_in_new_row(*row)
+                self.add_buttons_as_new_row(*row)
             self._paginated_buttons_inited = True
 
     def _init_frozen_buttons_map(self):
-        if not self._frozen_buttons_map_inited and self.frozen_buttons_map:
-            for row in self.frozen_buttons_map:
-                self.add_buttons_in_new_row(*row)
+        if not self._frozen_buttons_map_inited:
+            for row in self.frozen_buttons.keyboard_map:
+                self.add_buttons_as_new_row(*row)
             self._frozen_buttons_map_inited = True
 
     def _init_pagination(self):
         if not self._pagination_inited and len(self.split(self._size_page, self.paginated_buttons)) > 1:
-            self.add_buttons_in_new_row(self.left, self.right)
+            self.add_buttons_as_new_row(self.left, self.right)
             self._pagination_inited = True
 
     def _init_back(self):
         if not self._back_inited and self.backable:
-            self.add_buttons_in_new_row(self.back)
+            self.add_buttons_as_new_row(self.back)
             self._back_inited = True
 
     def reset(self):
@@ -372,7 +372,7 @@ class Conform(WindowBuilder):
     ):
         super().__init__(back_text=no_text, auto_back=False)
         self.add_texts_rows(TextWidget(text=prompt))
-        self.add_buttons_in_new_row(
+        self.add_buttons_as_new_row(
             ButtonWidget(text=yes_text, callback_data=yes_callback_data),
             ButtonWidget(text=no_text, callback_data=no_callback_data)
         )

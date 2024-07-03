@@ -78,9 +78,11 @@ SCHEDULER.configure(
 class BotControl:
     def __init__(
             self,
+            *,
             bot: Bot,
             chat_id: str,
             state: FSMContext,
+            set_up_storage: DictStorage,
             bot_storage: DictStorage,
             user_storage: DictStorage,
             name: str | None = None,
@@ -90,6 +92,7 @@ class BotControl:
         self.name = name
         self.user_storage = user_storage
         self.bot_storage = bot_storage
+        self._set_up_storage = set_up_storage
         self._messages_ids = ListStorage(f"{chat_id}:{bot.id}:messages_ids")
         self._context = ListStorage(f"{chat_id}:{bot.id}:context_stack")
         self._state = state
@@ -98,23 +101,24 @@ class BotControl:
             "text": self._update_text_message,
             "photo": self._update_photo_message,
             "voice": self._update_voice_message,
+            "audio": self._update_voice_message
         }
         self._message_life_span = message_life_span
 
     async def greetings(self):
-        await self.append(await self.bot_storage.get_value_by_key("greetings"))
+        await self.append(await self._set_up_storage.get_value_by_key("greetings"))
 
     async def get_private_title_screen(self) -> WindowBuilder:
-        return await self.bot_storage.get_value_by_key("private_title_screen")
+        return await self._set_up_storage.get_value_by_key("private_title_screen")
 
     async def set_private_title_screen(self, private_title_screen: WindowBuilder):
-        return await self.bot_storage.set_value_by_key("private_title_screen", private_title_screen)
+        return await self._set_up_storage.set_value_by_key("private_title_screen", private_title_screen)
 
     async def get_group_title_screen(self) -> WindowBuilder:
-        return await self.bot_storage.get_value_by_key("group_title_screen")
+        return await self._set_up_storage.get_value_by_key("group_title_screen")
 
     async def set_group_title_screen(self, group_title_screen: WindowBuilder):
-        return await self.bot_storage.set_value_by_key("group_title_screen", group_title_screen)
+        return await self._set_up_storage.set_value_by_key("group_title_screen", group_title_screen)
 
     # async def extend(self, *markups_: WindowBuilder):
     #     names = [i.__class__.__name__ for i in await self._context.get()]

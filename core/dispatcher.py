@@ -31,6 +31,7 @@ class BuildBot:
     ):
         self.bot = Bot(token, default=DefaultBotProperties(parse_mode='HTML'))
         self.bot_storage = DictStorage(f"{self.bot.id}:bot_storage")
+        self.set_up_storage = DictStorage(f"{self.bot.id}:set_up_storage")
         self._set_up = {
             "private_title_screen": private_title_screen,
             "group_title_screen": group_title_screen,
@@ -41,8 +42,10 @@ class BuildBot:
 
     async def start_polling(self, custom_commands: List[BotCommand]):
         for k, v in self._set_up.items():
-            await self.bot_storage.set_value_by_key(k, v)
-        self.dispatcher.update.middleware(BuildBotControl(self.bot, self.bot_storage, self.bot_control_schema))
+            await self.set_up_storage.set_value_by_key(k, v)
+        self.dispatcher.update.middleware(BuildBotControl(
+            self.bot, self.bot_storage, self.set_up_storage, self.bot_control_schema
+        ))
         self.dispatcher.include_routers(default_commands_router, group_commands, *self.routers, abyss_router)
 
         SCHEDULER.start()

@@ -1,10 +1,9 @@
+from typing import Literal, List, Dict, Tuple
 import string
 from collections import defaultdict
 from random import choice
 
 import Levenshtein
-from typing import List, Dict, Tuple
-
 from aiogram.filters.callback_data import CallbackData
 
 from FSM import States
@@ -14,59 +13,43 @@ from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
 from tools import Emoji, create_progress_text
 
 
-def knowledge_as_progress_string(user_knowledge: Dict, knowledge_border: int):
-    """
-    :param user_knowledge: extractable as dict as value by key, where key is word from dict english:knowledge from user_storage
-    :param knowledge_border: equal possible stars, equal questions types by word. Extractable from knowledge_schema len
-    :return:
-    """
-    p = 0
-    g = 0
-    for question_type, grades in user_knowledge.items():
-        if grades.get("p"):
-            p += 1
-        elif grades.get("g"):
-            g += 1
-
-    return create_progress_text(
-        numerator=int(0.5 * g + p),
-        denominator=knowledge_border,
-        length_widget=knowledge_border,
-        progress_element=Emoji.STAR,
-        remaining_element=Emoji.DARK_START
-    )
+class WordTickCallbackData(CallbackData, prefix="word_tick"):
+    index: int
 
 
-class Greetings(WindowBuilder):
-    def __init__(self):
-        super().__init__(type_="photo", back_text="Ok")
-        self.photo = "AgACAgIAAx0Cf42o9wACA15mg-YkVdOLBKZkbHrWutoTHQwCDQACw98xG3rTIEjZ6iLaf38deAEAAwIAA3gAAzUE"
-        self.add_texts_rows(TextWidget(
-            text=f"Wellcome, human.\nI am Tuurngaid.\nI will pass on all my knowledge to you, step by step."
-        ))
+class EditEnglish(WindowBuilder):
+    _prompt = {
+        "add": f"Edit English Run {Emoji.LIST_WITH_PENCIL}",
+        "edit": "I have some offer from the community"
+    }
 
-
-class PrivateTuurngaidTitleScreen(WindowBuilder):
-    def __init__(self):
+    def __init__(self, action_type: Literal["add", "edit"], words: set[str]):
+        self.action_type = action_type
         super().__init__(
-            type_="photo",
-            auto_back=False,
-            photo="AgACAgIAAx0Cf42o9wACA1lmg-KSXwhGC6Z6E3R00sYQ3cIKowACqt8xG3rTIEgLAn-plPmK1QEAAwIAA3MAAzUE",
+            paginated_buttons=[ButtonWidget(
+                mark=Emoji.OK,
+                text=word,
+                callback_data=WordTickCallbackData(index=i)
+            ) for i, word in enumerate(words)],
+            frozen_text_map=[
+                TextWidget(text=self._prompt[action_type])
+            ],
             frozen_buttons_map=[
                 [
-                    ButtonWidget(text="Run English", callback_data="run_english")
+                    ButtonWidget(
+                        text=f"Update global english run {Emoji.GLOBE_WITH_MERIDIANS}",
+                        callback_data="merge_words"
+                    )
                 ],
-                [
-                    ButtonWidget(text=f"Inspect English Run {Emoji.OPEN_BOOK}", callback_data="inspect_english_run")
-                ],
-                [
-                    ButtonWidget(text=f"Shop {Emoji.GIFT}", callback_data="init_shop")
-                ],
-                [
-                    ButtonWidget(text=f"My collection {Emoji.PICTURE_2}", callback_data="my_collection")
-                ]
             ]
         )
+        if action_type == "add":
+            self._dismiss_frozen_display()
+
+    def _dismiss_frozen_display(self):
+        self.frozen_buttons.add_buttons_as_new_row(ButtonWidget(
+            text=f"{Emoji.DENIAL} Dismiss", callback_data="drop_offer"
+        ))
 
 
 class SuggestWords(WindowBuilder):
@@ -84,6 +67,32 @@ class SuggestWords(WindowBuilder):
         self.add_texts_rows(
             TextWidget(text=f'"{suggest}" sent.\n\nSuggest another word')
         )
+
+
+def knowledge_as_progress_string(user_knowledge: Dict, knowledge_border: int, show_digits: bool = True):
+    """
+    :param show_digits:
+    :param user_knowledge: extractable as dict as value by key, where key is word from dict english:knowledge from user_storage
+    :param knowledge_border: equal possible stars, equal questions types by word. Extractable from knowledge_schema len
+    :return:
+    """
+    p = 0
+    g = 0
+    for question_type, grades in user_knowledge.items():
+        if grades.get("p"):
+            p += 1
+        elif grades.get("g"):
+            g += 1
+
+    return create_progress_text(
+        show_digits=show_digits,
+        numerator=int(0.5 * g + p),
+        denominator=knowledge_border,
+        length_widget=knowledge_border,
+        progress_element=Emoji.STAR,
+        remaining_element=Emoji.DARK_START
+
+    )
 
 
 class English(WindowBuilder):
@@ -314,7 +323,7 @@ class English(WindowBuilder):
         if ts:
             self.add_texts_rows(DataTextWidget(text=f"{Emoji.TALKING_HEAD} Transcription", data=ts + "\n"))
 
-        self.add_buttons_in_new_row(
+        self.add_buttons_as_new_row(
             ButtonWidget(text=f"{Emoji.OPEN_BOOK} Reference", callback_data="reference"),
             ButtonWidget(text=f"{Emoji.PLAY} Next", callback_data="draw_card")
         )
@@ -395,7 +404,7 @@ class InspectEnglishRun(WindowBuilder):
         possible_star = 0
         for i, x in enumerate(words):
             word, knowledge_size = x
-            progress = knowledge_as_progress_string(knowledge.get(word, {}), knowledge_size)
+            progress = knowledge_as_progress_string(knowledge.get(word, {}), knowledge_size, show_digits=False)
             stars += progress.count(Emoji.STAR)
             possible_star += len(progress)
             buttons.append(ButtonWidget(

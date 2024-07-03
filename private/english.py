@@ -9,7 +9,7 @@ from api import SuperEnglishDictionary
 from core.markups import Info, Conform
 
 from core import BotControl, Routers
-from private_markups import English, InspectEnglishRun, BanWordCallbackData
+from models.english import English, InspectEnglishRun, BanWordCallbackData
 from tools import Emoji
 
 english_router = Routers.private()
@@ -100,7 +100,7 @@ async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
 
 
 @english_router.callback_query(F.data == "inspect_english_run")
-async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
+async def inspect_english_run(callback: CallbackQuery, bot_control: BotControl):
     words = await bot_control.bot_storage.get_value_by_key("words")
     if not words:
         await bot_control.append(
