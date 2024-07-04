@@ -334,7 +334,7 @@ class ListStorage(Storage):
         except ValueError:
             return False
 
-    async def reset_last(self, item: Any):
+    async def set_last(self, item: Any):
         list_ = await self.get()
         if not list_:
             await self.reset(item)

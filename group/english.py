@@ -33,7 +33,7 @@ async def edit_english_run(callback: CallbackQuery, bot_control: BotControl):
 
 @admin_english_router.callback_query(WordTickCallbackData.filter())
 async def marking_words(callback: CallbackQuery, callback_data: WordTickCallbackData, bot_control: BotControl):
-    markup = await bot_control.current()
+    markup = await bot_control.get_current()
     if markup.paginated_buttons[callback_data.index].mark == Emoji.OK:
         markup.paginated_buttons[callback_data.index].mark = Emoji.DENIAL
     else:
@@ -43,7 +43,7 @@ async def marking_words(callback: CallbackQuery, callback_data: WordTickCallback
 
 @admin_english_router.callback_query(F.data == "merge_words")
 async def update_english_run(callback: CallbackQuery, bot_control: BotControl):
-    edit_english: EditEnglish = await bot_control.current()
+    edit_english: EditEnglish = await bot_control.get_current()
     words = await bot_control.bot_storage.get_value_by_key("words", set())
 
     if edit_english.action_type == "add":

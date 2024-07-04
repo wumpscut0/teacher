@@ -192,7 +192,6 @@ class WindowBuilder(
                 "pagination",
                 "back"
             ),
-            unique: bool = False,
             type_: Literal["text", "photo", "audio"] = "text",
             state: str | State | None = None,
             photo: str | FSInputFile | None = None,
@@ -225,8 +224,8 @@ class WindowBuilder(
         self.init_schema = init_schema
         self.frozen_text = TextMarkupConstructor(frozen_text_map)
         self.frozen_buttons = KeyboardMarkupConstructor(frozen_buttons_map)
-        self.unique = unique
 
+        self.up_to_date = False
         self._frozen_text_map_inited = False
         self._paginated_buttons_inited = False
         self._frozen_buttons_map_inited = False
@@ -256,6 +255,9 @@ class WindowBuilder(
     def init(self):
         for display_name in self.init_schema:
             self._init_map[display_name]()
+
+    def __call__(self, *args, **kwargs):
+        ...
 
     def _init_frozen_text_map(self):
         if not self._frozen_text_map_inited:
@@ -287,6 +289,7 @@ class WindowBuilder(
     def reset(self):
         self.text_map = []
         self.keyboard_map = [[]]
+        self.up_to_date = False
         self._frozen_text_map_inited = False
         self._paginated_buttons_inited = False
         self._frozen_buttons_map_inited = False

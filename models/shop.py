@@ -1,9 +1,9 @@
-from typing import Dict, Literal
+from typing import Literal
 
 from aiogram.filters.callback_data import CallbackData
 
 from FSM import States
-from core import WindowBuilder
+from core import WindowBuilder, BotControl
 from core.markups import ButtonWidget, TextWidget
 from tools import Emoji
 
@@ -26,13 +26,17 @@ class Shop(WindowBuilder):
         "edit": f"Edit shop {Emoji.TAG}"
     }
 
-    def __init__(
-            self,
-            shop_data: Dict,
-            action_type: Literal["buy", "edit"]
-    ):
+    def __init__(self, action_type: Literal["buy", "edit"]):
         self.temp_balance = None
         self.action_type = action_type
+        super().__init__(
+                frozen_text_map=[
+                    TextWidget(text=self._headers[action_type])
+                ],
+            )
+
+    async def __call__(self, bot_control: BotControl):
+        shop_data = await bot_control.bot_storage.get_value_by_key("shop", {})
         buttons = []
         for name, content in shop_data.items():
             button_text = name + " "
@@ -40,19 +44,10 @@ class Shop(WindowBuilder):
                 if int(cost) > 0:
                     button_text += f"{currency} {cost} "
             buttons.append(ButtonWidget(
-                    text=button_text,
-                    callback_data=self._actions[action_type](name=name))
-                )
-
-        super().__init__(
-                unique=True,
-                frozen_text_map=[
-                    TextWidget(text=self._headers[action_type])
-                ],
-                paginated_buttons=buttons,
-                buttons_per_line=3,
-                buttons_per_page=30,
+                text=button_text,
+                callback_data=self._actions[self.action_type](name=name))
             )
+        self.paginated_buttons = buttons
 
     def balance_display(self, dna: int = 0, cube: int = 0, star: int = 0):
         self.temp_balance = {
@@ -91,9 +86,8 @@ class Content(WindowBuilder):
         self.temp_dna_cost = temp_dna_cost
         self.temp_cube_cost = temp_cube_cost
         self.temp_star_cost = temp_star_cost
-        self.edit_display()
 
-    def edit_display(self):
+    def __call__(self, bot_control: BotControl):
         self.state = None
         self.add_texts_rows(TextWidget(text=f"{Emoji.PENCIL} {self.temp_name}\n"
                                             f"{Emoji.DNA} {self.temp_dna_cost} "

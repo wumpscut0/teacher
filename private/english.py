@@ -54,7 +54,7 @@ async def accept_input_text_word_translate(message: Message, bot_control: BotCon
         await bot_control.append(Info(f"Max symbols is {200} {Emoji.CRYING_CAT}"))
         return
 
-    english: English = await bot_control.current()
+    english: English = await bot_control.get_current()
     english.process_answer(answer)
     await bot_control.user_storage.set_value_by_key("english:knowledge", english.knowledge)
     updated_total_dna = await bot_control.user_storage.get_value_by_key("english:total_dna", 0) + english.temp_dna
@@ -66,14 +66,14 @@ async def accept_input_text_word_translate(message: Message, bot_control: BotCon
 
 @english_router.callback_query(F.data == "reference")
 async def reference(callback: CallbackQuery, bot_control: BotControl):
-    english: English = await bot_control.current()
+    english: English = await bot_control.get_current()
     english.reference()
     await bot_control.append(english)
 
 
 @english_router.callback_query(F.data == "draw_card")
 async def draw_card(callback: CallbackQuery, bot_control: BotControl):
-    english: English = await bot_control.current()
+    english: English = await bot_control.get_current()
     try:
         english.draw_card()
     except IndexError:
@@ -94,7 +94,7 @@ async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
 @english_router.callback_query(F.data == "flush_run")
 async def result_english_run(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.pop_last()
-    english: English = await bot_control.current()
+    english: English = await bot_control.get_current()
     english.result()
     await bot_control.set_current(english)
 
@@ -121,7 +121,7 @@ async def inspect_english_run(callback: CallbackQuery, bot_control: BotControl):
 
 @english_router.callback_query(BanWordCallbackData.filter())
 async def baning_words(callback: CallbackQuery, callback_data: BanWordCallbackData, bot_control: BotControl):
-    markup = await bot_control.current()
+    markup = await bot_control.get_current()
     ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
     if markup.paginated_buttons[callback_data.index].mark == Emoji.OK:
         markup.paginated_buttons[callback_data.index].mark = Emoji.DENIAL
@@ -135,7 +135,7 @@ async def baning_words(callback: CallbackQuery, callback_data: BanWordCallbackDa
 
 @english_router.callback_query(F.data == "ban_all")
 async def ban_all(callback: CallbackQuery, bot_control: BotControl):
-    markup = await bot_control.current()
+    markup = await bot_control.get_current()
     words = await bot_control.bot_storage.get_value_by_key("words")
     await bot_control.user_storage.set_value_by_key("english:ban_list", set(words))
     for button in markup.paginated_buttons:
@@ -145,7 +145,7 @@ async def ban_all(callback: CallbackQuery, bot_control: BotControl):
 
 @english_router.callback_query(F.data == "unban_all")
 async def unban_all(callback: CallbackQuery, bot_control: BotControl):
-    markup = await bot_control.current()
+    markup = await bot_control.get_current()
     await bot_control.user_storage.destroy_key("english:ban_list")
     for button in markup.paginated_buttons:
         button.mark = Emoji.OK

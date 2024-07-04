@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
 from core import BotControl
-from core.markups import Info
+from core.markups import Info, WindowBuilder
 from tools import Emoji, DictStorage
 
 
@@ -14,12 +14,16 @@ class BuildBotControl(BaseMiddleware):
             self,
             bot: Bot,
             bot_storage: DictStorage,
-            set_up_storage: DictStorage,
+            greetings: WindowBuilder,
+            private_title_screen: WindowBuilder,
+            group_title_screen: WindowBuilder,
             bot_control_schema: Type[BotControl]
     ):
         self._bot = bot
         self._bot_storage = bot_storage
-        self._set_up_storage = set_up_storage
+        self._greetings = greetings
+        self._private_title_screen = private_title_screen
+        self._group_title_screen = group_title_screen
         self._bot_control_schema = bot_control_schema
 
     async def __call__(
@@ -41,7 +45,9 @@ class BuildBotControl(BaseMiddleware):
             bot=self._bot,
             chat_id=str(await self._extract_chat_id(event)),
             state=state,
-            set_up_storage=self._set_up_storage,
+            greetings=self._greetings,
+            private_title_screen=self._private_title_screen,
+            group_title_screen=self._group_title_screen,
             bot_storage=self._bot_storage,
             user_storage=DictStorage(f"{await self._extract_user_id(event)}:user_storage"),
         )

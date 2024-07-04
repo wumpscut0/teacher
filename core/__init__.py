@@ -1,3 +1,4 @@
+from copy import copy, deepcopy
 from os import getenv
 from datetime import datetime, timedelta
 
@@ -82,7 +83,9 @@ class BotControl:
             bot: Bot,
             chat_id: str,
             state: FSMContext,
-            set_up_storage: DictStorage,
+            greetings: WindowBuilder,
+            private_title_screen: WindowBuilder,
+            group_title_screen: WindowBuilder,
             bot_storage: DictStorage,
             user_storage: DictStorage,
             name: str | None = None,
@@ -92,7 +95,9 @@ class BotControl:
         self.name = name
         self.user_storage = user_storage
         self.bot_storage = bot_storage
-        self._set_up_storage = set_up_storage
+        self._greetings = greetings
+        self._private_title_screen = private_title_screen
+        self._group_title_screen = group_title_screen
         self._messages_ids = ListStorage(f"{chat_id}:{bot.id}:messages_ids")
         self._context = ListStorage(f"{chat_id}:{bot.id}:context_stack")
         self._state = state
@@ -106,44 +111,30 @@ class BotControl:
         self._message_life_span = message_life_span
 
     async def greetings(self):
-        await self.append(await self._set_up_storage.get_value_by_key("greetings"))
-
-    async def get_private_title_screen(self) -> WindowBuilder:
-        return await self._set_up_storage.get_value_by_key("private_title_screen")
-
-    async def set_private_title_screen(self, private_title_screen: WindowBuilder):
-        return await self._set_up_storage.set_value_by_key("private_title_screen", private_title_screen)
-
-    async def get_group_title_screen(self) -> WindowBuilder:
-        return await self._set_up_storage.get_value_by_key("group_title_screen")
-
-    async def set_group_title_screen(self, group_title_screen: WindowBuilder):
-        return await self._set_up_storage.set_value_by_key("group_title_screen", group_title_screen)
-
-    # async def extend(self, *markups_: WindowBuilder):
-    #     names = [i.__class__.__name__ for i in await self._context.get()]
-    #     to_extend = []
-    #     for markup in markups_:
-    #         if markup.unique and markup.__class__.__name__ in names:
-    #             continue
-    #         to_extend.append(markup)
-    #
-    #     await self._context.extend(to_extend)
-    #     await self.push()
+        await self.append(self._greetings)
 
     async def append(self, markup: WindowBuilder):
-        if markup.unique and markup.__class__.__name__ in (i.__class__.__name__ for i in await self._context.get()):
-            await self._update_chat(markup)
-        else:
-            if await self._update_chat(markup):
-                await self._context.append(markup)
+        if await self._update_chat(markup):
+            await self._context.append(markup)
+
+    async def _up_to_date_markup(self, markup: WindowBuilder):
+        try:
+            await markup(self)
+        except TypeError:
+            pass
 
     async def back(self):
         await self.pop_last()
-        await self._update_chat(await self._context.get_last())
+        markup = await self._context.get_last()
+        if markup is None:
+            await self.reset()
+            return
+
+        markup.reset()
+        await self._update_chat(markup, force_up_to_date=True)
 
     async def pop_last(self):
-        await self._context.pop_last()
+        return await self._context.pop_last()
 
     async def refresh(self):
         await self._update_chat(await self._context.get_last())
@@ -155,12 +146,13 @@ class BotControl:
         await self._messages_ids.destroy()
 
         if self.chat_id.startswith("-"):
-            markup = await self.get_group_title_screen()
+            markup = deepcopy(self._group_title_screen)
         else:
-            markup = await self.get_private_title_screen()
+            markup = deepcopy(self._private_title_screen)
+
         await self._update_chat(markup)
 
-    async def current(self):
+    async def get_current(self):
         """
         :return: if not frozen, return last appended window builder without text_map and keyboard_map
         """
@@ -171,8 +163,8 @@ class BotControl:
         return markup
 
     async def set_current(self, markup: WindowBuilder):
-        if await self._update_chat(markup):
-            await self._context.reset_last(markup)
+        if await self._update_chat(markup, force_up_to_date=True):
+            await self._context.set_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):
         try:
@@ -290,12 +282,14 @@ class BotControl:
                 await self._delete_message(last_message_id)
                 return await self._update_message[markup.type](markup)
 
-    async def _update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
+    async def _update_chat(self, markup: WindowBuilder | None, force=False, force_up_to_date=False) -> bool:
         await self.clear_chat(force)
         try:
             if markup is None:
                 await self.reset()
             else:
+                if force_up_to_date or (markup.__class__.__name__ not in (i.__class__.__name__ for i in await self._context.get()) and not markup.up_to_date):
+                    await self._up_to_date_markup(markup)
                 markup.init()
                 await self._state.set_state(markup.state)
                 return await self._update_message[markup.type](markup)

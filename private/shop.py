@@ -28,7 +28,7 @@ async def open_shop(callback: CallbackQuery, bot_control: BotControl):
         await bot_control.append(Info(f"Shop is empty {Emoji.WEB}"))
         return
 
-    shop = Shop(shop, "buy")
+    shop = Shop("buy")
 
     dna = await bot_control.user_storage.get_value_by_key("english:total_dna", 0)
     cube = await bot_control.user_storage.get_value_by_key("english:keys", 0)
@@ -47,7 +47,7 @@ async def open_shop(callback: CallbackQuery, bot_control: BotControl):
 
 @private_shop_router.callback_query(BuyingContentCallbackData.filter())
 async def buy(callback: CallbackQuery, callback_data: BuyingContentCallbackData, bot_control: BotControl):
-    shop: Shop = await bot_control.current()
+    shop: Shop = await bot_control.get_current()
     shop_data = await bot_control.bot_storage.get_value_by_key("shop")
     item = shop_data[callback_data.name]
     widget = "\n"
@@ -64,7 +64,7 @@ async def buy(callback: CallbackQuery, callback_data: BuyingContentCallbackData,
 @private_shop_router.callback_query(F.data.startswith("buying:"))
 async def buying(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.pop_last()
-    shop: Shop = await bot_control.current()
+    shop: Shop = await bot_control.get_current()
     shop_data = await bot_control.bot_storage.get_value_by_key("shop")
     _, name = callback.data.split(":")
     item = shop_data[name]
@@ -79,16 +79,14 @@ async def buying(callback: CallbackQuery, bot_control: BotControl):
     collection[name] = item
     await bot_control.user_storage.set_value_by_key("collection", collection)
 
-    await bot_control.pop_last()
     shop_data = {k: v for k, v in shop_data.items() if k not in collection}
     if not shop_data:
-        await bot_control.append(Info(f"Empty {Emoji.WEB}"))
+        await bot_control.set_current(Info(f"Empty {Emoji.WEB}"))
         return
 
-    updated_shop = Shop(shop_data, "buy")
-    updated_shop.balance_display(dna, cube, shop.temp_balance[Emoji.STAR])
+    shop.balance_display(dna, cube, shop.temp_balance[Emoji.STAR])
 
-    await bot_control.append(updated_shop)
+    await bot_control.set_current(shop)
 
 
 class ShowItemCallbackData(CallbackData, prefix="show_item"):

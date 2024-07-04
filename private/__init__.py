@@ -32,3 +32,9 @@ class PrivateTitleScreen(WindowBuilder):
                 ]
             ]
         )
+
+    async def __call__(self, bot_control):
+        self.add_texts_rows(
+            TextWidget(text=f"{Emoji.DNA} {await bot_control.user_storage.get_value_by_key("english:total_dna", 0)}"
+                            f"  {Emoji.CUBE} {await bot_control.user_storage.get_value_by_key("english:keys", 0)}"),
+        )
