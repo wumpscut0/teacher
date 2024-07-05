@@ -55,7 +55,6 @@ class EditEnglish(WindowBuilder):
 class SuggestWords(WindowBuilder):
     def __init__(self):
         super().__init__(
-            unique=True,
             state=States.input_text_suggest_word,
             back_text=Emoji.BACK
         )

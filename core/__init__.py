@@ -1,4 +1,4 @@
-from copy import copy, deepcopy
+from copy import deepcopy
 from os import getenv
 from datetime import datetime, timedelta
 
@@ -109,29 +109,37 @@ class BotControl:
             "audio": self._update_voice_message
         }
         self._message_life_span = message_life_span
+        self._temp_current_markup_name = None
 
     async def greetings(self):
         await self.append(self._greetings)
 
     async def append(self, markup: WindowBuilder):
+        if self._temp_current_markup_name != markup.__class__.__name__:
+            try:
+                await markup(self)
+            except TypeError:
+                pass
+
         if await self._update_chat(markup):
             await self._context.append(markup)
 
-    async def _up_to_date_markup(self, markup: WindowBuilder):
-        try:
-            await markup(self)
-        except TypeError:
-            pass
-
-    async def back(self):
+    async def back(self, update=False):
         await self.pop_last()
         markup = await self._context.get_last()
+
         if markup is None:
             await self.reset()
             return
 
-        markup.reset()
-        await self._update_chat(markup, force_up_to_date=True)
+        if update:
+            markup.reset()
+            try:
+                await markup(self)
+            except TypeError:
+                pass
+
+        await self.set_current(markup, update=False)
 
     async def pop_last(self):
         return await self._context.pop_last()
@@ -154,16 +162,23 @@ class BotControl:
 
     async def get_current(self):
         """
-        :return: if not frozen, return last appended window builder without text_map and keyboard_map
+        :return: last appended window builder without text_map and keyboard_map
         """
         markup = await self._context.get_last()
         if markup is None:
             return
         markup.reset()
+        self._temp_current_markup_name = markup.__class__.__name__
         return markup
 
-    async def set_current(self, markup: WindowBuilder):
-        if await self._update_chat(markup, force_up_to_date=True):
+    async def set_current(self, markup: WindowBuilder, update=True):
+        if update:
+            try:
+                await markup(self)
+            except TypeError:
+                pass
+
+        if await self._update_chat(markup):
             await self._context.set_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):
@@ -282,14 +297,12 @@ class BotControl:
                 await self._delete_message(last_message_id)
                 return await self._update_message[markup.type](markup)
 
-    async def _update_chat(self, markup: WindowBuilder | None, force=False, force_up_to_date=False) -> bool:
+    async def _update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
         await self.clear_chat(force)
         try:
             if markup is None:
                 await self.reset()
             else:
-                if force_up_to_date or (markup.__class__.__name__ not in (i.__class__.__name__ for i in await self._context.get()) and not markup.up_to_date):
-                    await self._up_to_date_markup(markup)
                 markup.init()
                 await self._state.set_state(markup.state)
                 return await self._update_message[markup.type](markup)

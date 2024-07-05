@@ -16,6 +16,11 @@ async def back(message: Message, bot_control: BotControl):
     await bot_control.back()
 
 
+@abyss_router.callback_query(F.data == "update")
+async def update(message: Message, bot_control: BotControl):
+    await bot_control.back(True)
+
+
 @abyss_router.callback_query(F.data == "flip_left")
 async def flip_left(message: Message, bot_control: BotControl):
     markup = await bot_control.get_current()

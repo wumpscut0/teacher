@@ -202,7 +202,7 @@ class WindowBuilder(
             paginated_buttons: list[ButtonWidget] | None = None,
             frozen_text_map: list[TextWidget | DataTextWidget] | None = None,
             auto_back: bool = True,
-            back_callback_data: str = "back",
+            back_callback_data: Literal["back", "update"] | str = "back",
             back_text: str = Emoji.BACK,
             left_text: str = Emoji.LEFT,
             left_mark: str = "",
@@ -225,7 +225,6 @@ class WindowBuilder(
         self.frozen_text = TextMarkupConstructor(frozen_text_map)
         self.frozen_buttons = KeyboardMarkupConstructor(frozen_buttons_map)
 
-        self.up_to_date = False
         self._frozen_text_map_inited = False
         self._paginated_buttons_inited = False
         self._frozen_buttons_map_inited = False
@@ -289,7 +288,6 @@ class WindowBuilder(
     def reset(self):
         self.text_map = []
         self.keyboard_map = [[]]
-        self.up_to_date = False
         self._frozen_text_map_inited = False
         self._paginated_buttons_inited = False
         self._frozen_buttons_map_inited = False
@@ -338,8 +336,12 @@ class Info(WindowBuilder):
         self,
         text: str,
         back_text: str = "Ok",
+        back_callback_data: Literal["back", "update"] | str = "back"
     ):
-        super().__init__(back_text=back_text)
+        super().__init__(
+            back_text=back_text,
+            back_callback_data=back_callback_data
+        )
         self.add_texts_rows(TextWidget(text=text))
 
 

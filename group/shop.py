@@ -27,7 +27,7 @@ async def edit_shop(callback: CallbackQuery, bot_control: BotControl):
         await bot_control.append(Info(f"No content so far {Emoji.WEB}"))
         return
 
-    await bot_control.append(Shop(action_type="edit"))
+    await bot_control.append(Shop("edit"))
 
 
 @admin_shop_router.callback_query(EditContentCallbackData.filter())
@@ -51,13 +51,13 @@ async def edit_content(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.append(current)
 
 
-@admin_shop_router.message(StateFilter(States.input_photo_audio_content), F.content_type.in_({"photo", "audio"}))
+@admin_shop_router.message(StateFilter(States.input_photo_audio_content), F.content_type.in_({"photo", "audio", "voice"}))
 async def accept_content(message: Message, bot_control: BotControl):
     current: Content = await bot_control.get_current()
     if message.photo:
         current.photo = message.photo[0].file_id
         current.type = message.content_type
-    elif message.audio:
+    elif message.audio or message.voice:
         current.voice = message.audio.file_id
         current.type = message.content_type
     await message.delete()
@@ -147,12 +147,7 @@ async def delete_content(callback: CallbackQuery, bot_control: BotControl):
 async def conform_delete_content(callback: CallbackQuery, bot_control: BotControl):
     await bot_control.pop_last()
     content: Content = await bot_control.get_current()
-    shop: Dict = await bot_control.bot_storage.get_value_by_key("shop")
-    item = shop.pop(content.old_name)
-    await bot_control.bot_storage.set_value_by_key("shop", shop)
-
-    await bot_control.set_current(Info(f"Item {content.old_name} {Emoji.PHOTO if item["type"] == "photo" else Emoji.AUDIO}"
-                                  f" deleted {Emoji.CANDLE}"))
+    await content.delete(bot_control)
 
 
 @admin_shop_router.callback_query(F.data == "merge_content")
@@ -173,7 +168,7 @@ async def merge_content(callback: CallbackQuery, bot_control: BotControl):
         return
 
     if content.action_type == "edit":
-        shop.pop(content.old_name)
+        shop.pop(content.temp_old_name)
 
     shop[content.temp_name] = {
         "type": content.type,
@@ -185,4 +180,4 @@ async def merge_content(callback: CallbackQuery, bot_control: BotControl):
         }
     }
     await bot_control.bot_storage.set_value_by_key("shop", shop)
-    await bot_control.back()
+    await bot_control.back(True)
