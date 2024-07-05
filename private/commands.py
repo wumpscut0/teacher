@@ -8,7 +8,7 @@ from aiogram.types import Message, BotCommand
 from FSM import States
 from core import Routers, BotControl
 from core.markups import Info
-from private_markups import SuggestWords
+from models.english import SuggestWords
 
 commands_router = Routers.private()
 
@@ -41,6 +41,6 @@ async def accept_offer_words(message: Message, bot_control: BotControl):
         offer.add(word)
     await bot_control.bot_storage.set_value_by_key("offer", offer)
 
-    suggest: SuggestWords = await bot_control.current()
+    suggest: SuggestWords = await bot_control.get_current()
     suggest.suggest_another_word_display(", ".join(words))
     await bot_control.set_current(suggest)
