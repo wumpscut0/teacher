@@ -1,15 +1,14 @@
 from typing import Literal, List, Dict, Tuple
 import string
-from collections import defaultdict
 from random import choice
 
 import Levenshtein
 from aiogram.filters.callback_data import CallbackData
 
 from FSM import States
-from api import WordCard
-from core import errors_alt_telegram
-from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
+from api import WordCard, SuperEnglishDictionary
+from core import errors_alt_telegram, BotControl
+from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder, Info
 from tools import Emoji, create_progress_text
 
 
@@ -97,30 +96,32 @@ def knowledge_as_progress_string(user_knowledge: Dict, knowledge_border: int, sh
 class English(WindowBuilder):
     _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
 
-    def __init__(self, deck: List[WordCard], knowledge: Dict):
+    def __init__(self, deck: List[WordCard]):
         super().__init__(
             state=States.input_text_word_translate,
             back_callback_data="request_to_flush_run",
             back_text=f"Flush Run {Emoji.WAVE}"
         )
         self._deck = deck
-        self.knowledge = knowledge
-        self.current_card: WordCard | None = None
-        self._question_widget_temp: DataTextWidget | None = None
-        self.deck_size = len(deck)
-        self._rewards = defaultdict(int)
-        self._dna = 0
-        self._past_dna = 0
-        self.temp_dna = 0
-        self._possible_dna = 0
-        self._keys = 0
-        self._past_keys = 0
-        self.temp_keys = 0
-        self._possible_keys = 0
-        self.progress_temp: str
-        self.grade_temp: str
+        self._deck_size = len(deck)
+        self._temp_current_card: WordCard | None = None
+
+        self._temp_knowledge: Dict | None = None
+
+        self._temp_dna = 0
+        self._temp_past_dna = 0
+        self._temp_possible_dna = 0
+
+        self._temp_cube = 0
+        self._temp_past_cube = 0
+        self._temp_possible_cube = 0
+
+        self._temp_progress: str
+        self._temp_grade: str
+
         self._count_right_answers = 0
-        self._possible_count_right_answers = 0
+        self._count_possible_right_answers = 0
+
         self._calculators = {
             "default:en-ru": self._calc_default_en_ru,
             "default:ru-en": self._calc_default_ru_en,
@@ -134,52 +135,61 @@ class English(WindowBuilder):
         }
         self.draw_card()
 
-    def process_answer(self, answer: str):
+    async def process_answer(self, answer: str, bot_control: BotControl):
         self.type = "text"
         self.state = None
-        self._possible_count_right_answers += 1
+        self._count_possible_right_answers += 1
 
-        self._calculators[self.current_card.type](answer)
+        self._calculators[self._temp_current_card.type](answer)
 
-        knowledge = self.knowledge.get(self.current_card.word, self.current_card.knowledge_scheme)
-        knowledge[self.current_card.type][self.grade_temp] += 1
-        self.knowledge[self.current_card.word] = knowledge
+        user_knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
+        word_knowledge = user_knowledge.get(self._temp_current_card.word, self._temp_current_card.knowledge_scheme)
+        word_knowledge[self._temp_current_card.type][self._temp_grade] += 1
+        user_knowledge[self._temp_current_card.word] = word_knowledge
+        self._temp_knowledge = user_knowledge
+        await bot_control.user_storage.set_value_by_key("english:knowledge", user_knowledge)
+
+        new_dna = await bot_control.user_storage.get_value_by_key("english:total_dna", 0) + self._temp_dna
+        await bot_control.user_storage.set_value_by_key("english:total_dna", new_dna)
+
+        new_keys = await bot_control.user_storage.get_value_by_key("english:keys", 0) + self._temp_cube
+        await bot_control.user_storage.set_value_by_key("english:keys", new_keys)
 
         self._stage_display()
         self._word_info_display()
         self._knowledge_display()
         self._question_display()
         self._comparison_answer_display(answer)
-        self._grades_displaces[self.grade_temp]()
-        self._past_dna += self.temp_dna
-        self._past_keys += self.temp_keys
+        self._grades_displaces[self._temp_grade]()
+        self._temp_past_dna += self._temp_dna
+        self._temp_past_cube += self._temp_cube
 
     def _comparison_answer_display(self, answer):
-        if self.current_card.type == "default:en-ru":
+        if self._temp_current_card.type == "default:en-ru":
             r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer",
-                               data="\n".join(self.current_card.answer) + "\n", sep=":\n")
+                               data="\n".join(self._temp_current_card.answer) + "\n", sep=":\n")
         else:
-            r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer", data=self.current_card.answer + "\n")
+            r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer", data=self._temp_current_card.answer + "\n")
         self.add_texts_rows(
             r,
             DataTextWidget(text=f"\n{Emoji.LIST_WITH_PENCIL} Your answer", data=answer + "\n")
         )
 
     def _knowledge_display(self):
-        progress = knowledge_as_progress_string(self.knowledge[self.current_card.word], self.current_card.knowledge_border)
+        progress = knowledge_as_progress_string(self._temp_knowledge[self._temp_current_card.word], self._temp_current_card.knowledge_border)
         self.add_texts_rows(DataTextWidget(text=f"{Emoji.SQUARE_ACADEMIC_CAP} Knowledge level", data=progress))
 
     def _stage_display(self):
         self.add_texts_rows(
-            DataTextWidget(text=f"{Emoji.BOOKS_STACK} Stage", data=str(self._possible_count_right_answers)))
+            DataTextWidget(text=f"{Emoji.BOOKS_STACK} Stage", data=str(self._count_possible_right_answers)))
 
     def _calc_default_en_ru(self, answer: str):
-        correct_answers = list(map(lambda x: x.strip().lower(), self.current_card.answer))
+        correct_answers = list(map(lambda x: x.strip().lower(), self._temp_current_card.answer))
         user_answers = set(map(lambda x: x.strip().lower().translate(self._cleaner), answer.split()))
 
         user_correct_answers = [user_answer for user_answer in user_answers if user_answer in correct_answers]
 
-        self.progress_temp = create_progress_text(
+        self._temp_progress = create_progress_text(
             numerator=len(user_correct_answers) * 2,
             denominator=len(correct_answers) * 2,
             length_widget=len(correct_answers) * 2,
@@ -189,40 +199,40 @@ class English(WindowBuilder):
         self._calculate_dna()
 
         if len(user_correct_answers) >= len(correct_answers) // 2:
-            self.grade_temp = "p"
+            self._temp_grade = "p"
         elif len(user_correct_answers) > 0:
-            self.grade_temp = "g"
+            self._temp_grade = "g"
         else:
-            self.grade_temp = "b"
+            self._temp_grade = "b"
 
     def _calc_example(self, answer: str):
         correct_answer = " ".join(
-            map(lambda x: x.strip(), self.current_card.answer.translate(self._cleaner).lower().split()))
+            map(lambda x: x.strip(), self._temp_current_card.answer.translate(self._cleaner).lower().split()))
         user_answer = " ".join(map(lambda x: x.strip(), answer.translate(self._cleaner).lower().split()))
         distance = Levenshtein.distance(user_answer, correct_answer)
 
-        self.progress_temp = create_progress_text(
+        self._temp_progress = create_progress_text(
             numerator=distance,
             denominator=len(correct_answer),
             length_widget=len(correct_answer.split()),
             show_digits=False,
             progress_element=Emoji.CHAINS, remaining_element=Emoji.CUBE
         )[::-1]
-        self._calculate_keys()
+        self._calculate_cube()
 
         if not distance:
-            assert Emoji.CHAINS not in self.progress_temp
-            self.grade_temp = "p"
-        elif self.temp_keys >= len(self.progress_temp) // 2:
-            self.grade_temp = "g"
+            assert Emoji.CHAINS not in self._temp_progress
+            self._temp_grade = "p"
+        elif self._temp_cube >= len(self._temp_progress) // 2:
+            self._temp_grade = "g"
         else:
-            self.grade_temp = "b"
+            self._temp_grade = "b"
 
     def _calc_default_ru_en(self, answer: str):
-        correct_answer = self.current_card.answer.lower()
+        correct_answer = self._temp_current_card.answer.lower()
         user_answer = answer.lower().strip().translate(self._cleaner)
         distance = Levenshtein.distance(user_answer, correct_answer)
-        self.progress_temp = create_progress_text(
+        self._temp_progress = create_progress_text(
             numerator=distance,
             denominator=len(correct_answer),
             length_widget=len(correct_answer),
@@ -232,83 +242,81 @@ class English(WindowBuilder):
         self._calculate_dna()
 
         if not distance:
-            assert Emoji.FLASK not in self.progress_temp
-            self.grade_temp = "p"
+            assert Emoji.FLASK not in self._temp_progress
+            self._temp_grade = "p"
         elif distance < 3:
-            self.grade_temp = "g"
+            self._temp_grade = "g"
         else:
-            self.grade_temp = "b"
+            self._temp_grade = "b"
 
     def _calculate_dna(self):
-        self._possible_dna += len(self.progress_temp)
-        self.temp_dna = self.progress_temp.count(Emoji.DNA)
-        self._dna += self.temp_dna
+        self._temp_possible_dna += len(self._temp_progress)
+        self._temp_dna += self._temp_progress.count(Emoji.DNA)
 
-    def _calculate_keys(self):
-        self._possible_keys += len(self.progress_temp)
-        self.temp_keys = self.progress_temp.count(Emoji.CUBE)
-        self._keys += self.temp_keys
+    def _calculate_cube(self):
+        self._temp_possible_cube += len(self._temp_progress)
+        self._temp_cube += self._temp_progress.count(Emoji.CUBE)
 
     def _perfectly(self):
-        if self.current_card.type.startswith("default"):
+        if self._temp_current_card.type.startswith("default"):
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self._past_dna} + {self.temp_dna}\n{Emoji.UNIVERSE} Perfectly!"
+                    text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_dna}\n{Emoji.UNIVERSE} Perfectly!"
                 )
             )
         else:
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self.progress_temp} {self._past_keys} + {self.temp_keys}\n{Emoji.UNIVERSE} Perfectly!"
+                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_cube}\n{Emoji.UNIVERSE} Perfectly!"
                 )
             )
         self._count_right_answers += 1
 
     def _good(self):
-        if self.current_card.type.startswith("default"):
+        if self._temp_current_card.type.startswith("default"):
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self._past_dna} + {self.temp_dna}\n{Emoji.BRAIN} Good!"
+                    text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_progress.count(Emoji.DNA)}\n{Emoji.BRAIN} Good!"
                 )
             )
         else:
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self.progress_temp} {self._past_keys} + {self.temp_keys}\n{Emoji.BRAIN} Good!"
+                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_cube}\n{Emoji.BRAIN} Good!"
                 )
             )
         self._count_right_answers += 1
 
     def _bad(self):
-        if self.current_card.type.startswith("default"):
-            if Emoji.DNA not in self.progress_temp:
+        if self._temp_current_card.type.startswith("default"):
+            if Emoji.DNA not in self._temp_progress:
                 self.add_texts_rows(
                     TextWidget(
-                        text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self._past_dna} + {self.temp_dna}\n{Emoji.BIOHAZARD}"
+                        text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_progress.count(Emoji.DNA)}\n{Emoji.BIOHAZARD}"
                     )
                 )
             else:
                 self.add_texts_rows(
                     TextWidget(
-                        text=f"\n{self.progress_temp} {Emoji.ALCHEMY} {Emoji.DNA} {self._past_dna} + {self.temp_dna}\n{Emoji.BROKEN_ROSE} You can do better!"
+                        text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_progress.count(Emoji.DNA)}\n{Emoji.BROKEN_ROSE} You can do better!"
                     )
                 )
         else:
-            if Emoji.CUBE not in self.progress_temp:
+            if Emoji.CUBE not in self._temp_progress:
                 self.add_texts_rows(
                     TextWidget(
-                        text=f"\n{self.progress_temp} {self._past_keys} + {self.temp_keys}\n{Emoji.BIOHAZARD}"
+                        text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_progress.count(Emoji.CUBE)}\n{Emoji.BIOHAZARD}"
                     )
                 )
             else:
                 self.add_texts_rows(
                     TextWidget(
-                        text=f"\n{self.progress_temp} {self._past_keys} + {self.temp_keys}\n{Emoji.BROKEN_ROSE} You can do better!"
+                        text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_progress.count(Emoji.CUBE)}\n{Emoji.BROKEN_ROSE} You can do better!"
                     )
                 )
 
     def _word_info_display(self):
-        data = self.current_card.data
+        data = self._temp_current_card.data
 
         if data.get("audio"):
             self.voice = choice(data["audio"])
@@ -316,7 +324,7 @@ class English(WindowBuilder):
         else:
             self.type = "text"
 
-        self.add_texts_rows(DataTextWidget(text=f"{Emoji.PUZZLE} Word", data=self.current_card.word))
+        self.add_texts_rows(DataTextWidget(text=f"{Emoji.PUZZLE} Word", data=self._temp_current_card.word))
 
         ts = data.get("ts")
         if ts:
@@ -331,24 +339,24 @@ class English(WindowBuilder):
         self.type = "text"
         self.state = States.input_text_word_translate
         card = self._deck.pop()
-        self.current_card = card
+        self._temp_current_card = card
         self._question_display()
 
     def _question_display(self):
-        if self.current_card.type == "default:ru-en":
-            self.add_texts_rows(DataTextWidget(text=f"\n{Emoji.ALCHEMY} {self.current_card.question_text}",
-                                               data="\n".join(self.current_card.question), sep="\n"))
+        if self._temp_current_card.type == "default:ru-en":
+            self.add_texts_rows(DataTextWidget(text=f"\n{Emoji.ALCHEMY} {self._temp_current_card.question_text}",
+                                               data="\n".join(self._temp_current_card.question), sep="\n"))
         else:
-            self.add_texts_rows(DataTextWidget(text=f"\n{Emoji.ALCHEMY} {self.current_card.question_text}",
-                                               data=self.current_card.question))
+            self.add_texts_rows(DataTextWidget(text=f"\n{Emoji.ALCHEMY} {self._temp_current_card.question_text}",
+                                               data=self._temp_current_card.question))
 
     def reference(self):
         self.back.text = Emoji.BACK
         self.back.callback_data = "back"
         self.type = "text"
         self.state = None
-        self.add_texts_rows(TextWidget(text=f"{Emoji.PUZZLE} {self.current_card.word}"))
-        for pos, pos_content in self.current_card.data["pos"].items():
+        self.add_texts_rows(TextWidget(text=f"{Emoji.PUZZLE} {self._temp_current_card.word}"))
+        for pos, pos_content in self._temp_current_card.data["pos"].items():
             self.add_texts_rows(
                 TextWidget(
                     text=f"\n{Emoji.CHAIN_SEPARATOR * 3}\n\n{Emoji.THOUGHT_BABBLE} as {pos} {Emoji.THOUGHT_BABBLE}"),
@@ -374,7 +382,7 @@ class English(WindowBuilder):
                             DataTextWidget(text=f"\n{example["original"]}", data=f"{example["translate"]}", sep="\n")
                         )
                     except KeyError:
-                        errors_alt_telegram.error(f"Impossible show up some example for word: {self.current_card.word}",
+                        errors_alt_telegram.error(f"Impossible show up some example for word: {self._temp_current_card.word}",
                                                   exc_info=True)
 
     def result(self):
@@ -383,9 +391,9 @@ class English(WindowBuilder):
         self.add_texts_rows(TextWidget(text="Your result\n"))
         self.add_texts_rows(
             DataTextWidget(text="Right answers",
-                           data=f"{self._count_right_answers}/{self._possible_count_right_answers}\n"),
-            DataTextWidget(text=Emoji.DNA, data=f"{self._dna}/{self._possible_dna}", sep=""),
-            DataTextWidget(text=Emoji.CUBE, data=f"{self._keys}/{self._possible_keys}", sep="")
+                           data=f"{self._count_right_answers}/{self._count_possible_right_answers}\n"),
+            DataTextWidget(text=Emoji.DNA, data=f"{self._temp_dna}/{self._temp_possible_dna}", sep=""),
+            DataTextWidget(text=Emoji.CUBE, data=f"{self._temp_cube}/{self._temp_possible_cube}", sep="")
         )
         self.back.callback_data = "back"
         self.back.text = f"Ok"
@@ -397,7 +405,27 @@ class BanWordCallbackData(CallbackData, prefix="ban_word"):
 
 
 class InspectEnglishRun(WindowBuilder):
-    def __init__(self, words: List[Tuple[str, int]], bun_list: List[str], knowledge: Dict):
+    def __init__(self):
+        super().__init__(
+            frozen_buttons_map=[
+                [
+                    ButtonWidget(text=f"Ban all {Emoji.DENIAL}", callback_data="ban_all"),
+                    ButtonWidget(text=f"Unban all {Emoji.OK}", callback_data="unban_all")
+                ],
+            ],
+        )
+
+    async def __call__(self, bot_control: BotControl):
+        words = await bot_control.bot_storage.get_value_by_key("words")
+        words_ = []
+        for word in words:
+            data = await SuperEnglishDictionary.extract_data(word)
+            if data["pos"]:
+                knowledge_size = len(SuperEnglishDictionary.build_knowledge_schema(data))
+                words_.append((word, knowledge_size))
+
+        knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
+        ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
         buttons = []
         stars = 0
         possible_star = 0
@@ -408,18 +436,29 @@ class InspectEnglishRun(WindowBuilder):
             possible_star += len(progress)
             buttons.append(ButtonWidget(
                 text=f"{word} {progress}",
-                mark=Emoji.OK if word not in bun_list else Emoji.DENIAL,
+                mark=Emoji.OK if word not in ban_list else Emoji.DENIAL,
                 callback_data=BanWordCallbackData(index=i, word=word)
             ))
-        super().__init__(
-            paginated_buttons=buttons,
-            frozen_buttons_map=[
-                [
-                    ButtonWidget(text=f"Ban all {Emoji.DENIAL}", callback_data="ban_all"),
-                    ButtonWidget(text=f"Unban all {Emoji.OK}", callback_data="unban_all")
-                ],
-            ],
-            frozen_text_map=[
-                TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}")
-            ]
-        )
+        self.paginated_buttons = buttons
+        self.frozen_text.add_texts_rows(TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"))
+
+    async def banning(self, bot_control: BotControl, index: int, word: str):
+        ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
+        if self.paginated_buttons[index].mark == Emoji.OK:
+            self.paginated_buttons[index].mark = Emoji.DENIAL
+            ban_list.add(word)
+        else:
+            self.paginated_buttons[index].mark = Emoji.OK
+            ban_list.remove(word)
+        await bot_control.user_storage.set_value_by_key("english:ban_list", ban_list)
+
+    async def ban_all(self, bot_control: BotControl):
+        words = await bot_control.bot_storage.get_value_by_key("words")
+        await bot_control.user_storage.set_value_by_key("english:ban_list", set(words))
+        for button in self.paginated_buttons:
+            button.mark = Emoji.DENIAL
+
+    async def unban_all(self, bot_control: BotControl):
+        await bot_control.user_storage.destroy_key("english:ban_list")
+        for button in self.paginated_buttons:
+            button.mark = Emoji.OK

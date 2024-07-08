@@ -158,6 +158,10 @@ class BotControl:
         else:
             markup = deepcopy(self._private_title_screen)
 
+        try:
+            await markup(self)
+        except TypeError:
+            pass
         await self._update_chat(markup)
 
     async def get_current(self):
