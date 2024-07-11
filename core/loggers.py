@@ -25,7 +25,7 @@ config = {
     "loggers": {
         "errors_alt_telegram": {"level": logging.ERROR, "handlers": ["errors"]},
         "info_alt_telegram": {"level": logging.INFO, "handlers": ["info"]},
-        "debug_alt_telegram": {"level": logging.CRITICAL, "handlers": ["debug"]},
+        "debug_alt_telegram": {"level": logging.DEBUG, "handlers": ["debug"]},
     },
 }
 

@@ -106,7 +106,7 @@ async def inspect_english_run(callback: CallbackQuery, bot_control: BotControl):
 
 
 @english_router.callback_query(BanWordCallbackData.filter())
-async def baning_words(callback: CallbackQuery, callback_data: BanWordCallbackData, bot_control: BotControl):
+async def banning_words(callback: CallbackQuery, callback_data: BanWordCallbackData, bot_control: BotControl):
     inspect: InspectEnglishRun = await bot_control.get_current()
     await inspect.banning(bot_control, callback_data.index, callback_data.word)
     await bot_control.set_current(inspect)

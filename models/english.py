@@ -1,3 +1,4 @@
+from collections import defaultdict, OrderedDict
 from typing import Literal, List, Dict, Tuple
 import string
 from random import choice
@@ -93,6 +94,9 @@ def knowledge_as_progress_string(user_knowledge: Dict, knowledge_border: int, sh
     )
 
 
+
+
+
 class English(WindowBuilder):
     _cleaner = str.maketrans("", "", string.punctuation.replace("-", "") + "№")
 
@@ -122,6 +126,8 @@ class English(WindowBuilder):
         self._count_right_answers = 0
         self._count_possible_right_answers = 0
 
+        self._temp_en_ru_statistic = None
+
         self._calculators = {
             "default:en-ru": self._calc_default_en_ru,
             "default:ru-en": self._calc_default_ru_en,
@@ -140,7 +146,9 @@ class English(WindowBuilder):
         self.state = None
         self._count_possible_right_answers += 1
 
+        self._temp_en_ru_statistic = await bot_control.user_storage.get_value_by_key("english:en-ru_statistic", {})
         self._calculators[self._temp_current_card.type](answer)
+        await bot_control.user_storage.set_value_by_key("english:en-ru_statistic", self._temp_en_ru_statistic)
 
         user_knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
         word_knowledge = user_knowledge.get(self._temp_current_card.word, self._temp_current_card.knowledge_scheme)
@@ -167,9 +175,10 @@ class English(WindowBuilder):
     def _comparison_answer_display(self, answer):
         if self._temp_current_card.type == "default:en-ru":
             r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer",
-                               data="\n".join(self._temp_current_card.answer) + "\n", sep=":\n")
+                               data="\n".join((f"{w} {fr}" for w, fr in self._temp_current_card.answer)) + "\n", sep=":\n")
         else:
             r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer", data=self._temp_current_card.answer + "\n")
+
         self.add_texts_rows(
             r,
             DataTextWidget(text=f"\n{Emoji.LIST_WITH_PENCIL} Your answer", data=answer + "\n")
@@ -187,10 +196,23 @@ class English(WindowBuilder):
         correct_answers = list(map(lambda x: x.strip().lower(), self._temp_current_card.answer))
         user_answers = set(map(lambda x: x.strip().lower().translate(self._cleaner), answer.split()))
 
-        user_correct_answers = [user_answer for user_answer in user_answers if user_answer in correct_answers]
+        answer_schema = {answer: 0 for answer in correct_answers}
+
+        answer_user_statistic = self._temp_en_ru_statistic.get(self._temp_current_card.word, defaultdict(int))
+
+        correct_answers_count = 0
+        for user_answer in user_answers:
+            if user_answer in correct_answers:
+                correct_answers_count += 1
+                answer_user_statistic[user_answer] += 1
+
+        self._temp_en_ru_statistic[self._temp_current_card.word] = answer_user_statistic
+
+        answer_schema.update(answer_user_statistic)
+        self._temp_current_card.answer = sorted(answer_schema.items(), key=lambda item: item[1], reverse=True)
 
         self._temp_progress = create_progress_text(
-            numerator=len(user_correct_answers) * 2,
+            numerator=correct_answers_count * 2,
             denominator=len(correct_answers) * 2,
             length_widget=len(correct_answers) * 2,
             show_digits=False,
@@ -198,9 +220,9 @@ class English(WindowBuilder):
         )
         self._calculate_dna()
 
-        if len(user_correct_answers) >= len(correct_answers) // 2:
+        if correct_answers_count >= len(correct_answers) // 2:
             self._temp_grade = "p"
-        elif len(user_correct_answers) > 0:
+        elif correct_answers_count > 0:
             self._temp_grade = "g"
         else:
             self._temp_grade = "b"
@@ -261,13 +283,13 @@ class English(WindowBuilder):
         if self._temp_current_card.type.startswith("default"):
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_dna}\n{Emoji.UNIVERSE} Perfectly!"
+                    text=f"\n{self._temp_progress} {Emoji.ALCHEMY} {Emoji.DNA} {self._temp_past_dna} + {self._temp_progress.count(Emoji.DNA)}\n{Emoji.UNIVERSE} Perfectly!"
                 )
             )
         else:
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_cube}\n{Emoji.UNIVERSE} Perfectly!"
+                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_progress.count(Emoji.CUBE)}\n{Emoji.UNIVERSE} Perfectly!"
                 )
             )
         self._count_right_answers += 1
@@ -282,7 +304,7 @@ class English(WindowBuilder):
         else:
             self.add_texts_rows(
                 TextWidget(
-                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_cube}\n{Emoji.BRAIN} Good!"
+                    text=f"\n{self._temp_progress} {self._temp_past_cube} + {self._temp_progress.count(Emoji.CUBE)}\n{Emoji.BRAIN} Good!"
                 )
             )
         self._count_right_answers += 1
