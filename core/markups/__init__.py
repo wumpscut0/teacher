@@ -232,6 +232,8 @@ class WindowBuilder(
         self._back_inited = False
 
         self.paginated_buttons = [] if paginated_buttons is None else paginated_buttons
+        # If initializing is False, a markup can correct install another markup with undoing the installation of itself
+        self.initializing = True
         self._size_page = buttons_per_page
         self.buttons_per_line = buttons_per_line
         self.backable = auto_back

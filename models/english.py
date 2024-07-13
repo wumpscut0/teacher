@@ -1,5 +1,6 @@
-from collections import defaultdict, OrderedDict
-from typing import Literal, List, Dict, Tuple
+from collections import defaultdict
+from math import ceil
+from typing import Literal, List, Dict
 import string
 from random import choice
 
@@ -9,7 +10,7 @@ from aiogram.filters.callback_data import CallbackData
 from FSM import States
 from api import WordCard, SuperEnglishDictionary
 from core import errors_alt_telegram, BotControl
-from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder, Info
+from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
 from tools import Emoji, create_progress_text
 
 
@@ -17,39 +18,100 @@ class WordTickCallbackData(CallbackData, prefix="word_tick"):
     index: int
 
 
+class EditWordCallbackData(CallbackData, prefix="edit_word"):
+    word: str
+
+
+class ResetWordCallbackData(CallbackData, prefix="reset_word"):
+    word: str
+
+
 class EditEnglish(WindowBuilder):
     _prompt = {
-        "add": f"Edit English Run {Emoji.LIST_WITH_PENCIL}",
-        "edit": "I have some offer from the community"
+        "edit": f"Edit English Run {Emoji.LIST_WITH_PENCIL}",
+        "add": "I have some offer from the community"
     }
 
     def __init__(self, action_type: Literal["add", "edit"], words: set[str]):
         self.action_type = action_type
+        self._temp_words = words
         super().__init__(
-            paginated_buttons=[ButtonWidget(
-                mark=Emoji.OK,
-                text=word,
-                callback_data=WordTickCallbackData(index=i)
-            ) for i, word in enumerate(words)],
             frozen_text_map=[
                 TextWidget(text=self._prompt[action_type])
             ],
             frozen_buttons_map=[
                 [
                     ButtonWidget(
-                        text=f"Update global english run {Emoji.GLOBE_WITH_MERIDIANS}",
+                        text=f"Save and exit {Emoji.FLOPPY_DISC}",
                         callback_data="merge_words"
                     )
                 ],
             ]
         )
+        if action_type == "edit":
+            self.backable = False
+            self._words_with_edit_display()
         if action_type == "add":
+            self._only_words_display()
             self._dismiss_frozen_display()
+
+    def _words_with_edit_display(self):
+        self.buttons_per_line = 3
+
+        buttons = []
+        for i, word in enumerate(self._temp_words):
+            buttons.append(ButtonWidget(
+                          mark=Emoji.OK,
+                          text=word,
+                          callback_data=WordTickCallbackData(index=i * self.buttons_per_line)
+                      ))
+            buttons.append(ButtonWidget(
+                text=Emoji.PENCIL,
+                callback_data=EditWordCallbackData(word=word)
+            ))
+            buttons.append(ButtonWidget(
+                text=Emoji.CYCLE,
+                callback_data=ResetWordCallbackData(word=word)
+            ))
+
+        self.paginated_buttons = buttons
+
+    def _only_words_display(self):
+        self.paginated_buttons = [ButtonWidget(
+            mark=Emoji.OK,
+            text=word,
+            callback_data=WordTickCallbackData(index=i)
+        ) for i, word in enumerate(self._temp_words)]
 
     def _dismiss_frozen_display(self):
         self.frozen_buttons.add_buttons_as_new_row(ButtonWidget(
             text=f"{Emoji.DENIAL} Dismiss", callback_data="drop_offer"
         ))
+
+    async def merge_words(self, bot_control: BotControl):
+        words = await bot_control.bot_storage.get_value_by_key("words", set())
+
+        if self.action_type == "add":
+            for word_button in self.paginated_buttons:
+                if word_button.mark == Emoji.OK:
+                    words.add(word_button.text)
+            await bot_control.bot_storage.destroy_key("offer")
+        else:
+            for word_button in self.paginated_buttons:
+                if word_button.mark == Emoji.DENIAL:
+                    words.remove(word_button.text)
+
+        await bot_control.bot_storage.set_value_by_key("words", words)
+
+    def marking_words(self, index: int):
+        if self.paginated_buttons[index].mark == Emoji.OK:
+            self.paginated_buttons[index].mark = Emoji.DENIAL
+        else:
+            self.paginated_buttons[index].mark = Emoji.OK
+
+    @staticmethod
+    async def reset_word(word: str):
+        await SuperEnglishDictionary.extract_data(word, cache=False)
 
 
 class SuggestWords(WindowBuilder):
@@ -85,16 +147,13 @@ def knowledge_as_progress_string(user_knowledge: Dict, knowledge_border: int, sh
 
     return create_progress_text(
         show_digits=show_digits,
-        numerator=int(0.5 * g + p),
+        numerator=ceil(0.5 * g + p),
         denominator=knowledge_border,
         length_widget=knowledge_border,
         progress_element=Emoji.STAR,
         remaining_element=Emoji.DARK_START
 
     )
-
-
-
 
 
 class English(WindowBuilder):
@@ -169,13 +228,14 @@ class English(WindowBuilder):
         self._question_display()
         self._comparison_answer_display(answer)
         self._grades_displaces[self._temp_grade]()
-        self._temp_past_dna += self._temp_dna
-        self._temp_past_cube += self._temp_cube
+        self._temp_past_dna = self._temp_dna
+        self._temp_past_cube = self._temp_cube
 
     def _comparison_answer_display(self, answer):
         if self._temp_current_card.type == "default:en-ru":
             r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer",
-                               data="\n".join((f"{w} {fr}" for w, fr in self._temp_current_card.answer)) + "\n", sep=":\n")
+                               data="\n".join((f"{w} {fr}" for w, fr in self._temp_current_card.answer)) + "\n",
+                               sep=":\n")
         else:
             r = DataTextWidget(text=f"\n{Emoji.SHINE_STAR} Right answer", data=self._temp_current_card.answer + "\n")
 
@@ -185,7 +245,8 @@ class English(WindowBuilder):
         )
 
     def _knowledge_display(self):
-        progress = knowledge_as_progress_string(self._temp_knowledge[self._temp_current_card.word], self._temp_current_card.knowledge_border)
+        progress = knowledge_as_progress_string(self._temp_knowledge[self._temp_current_card.word],
+                                                self._temp_current_card.knowledge_border)
         self.add_texts_rows(DataTextWidget(text=f"{Emoji.SQUARE_ACADEMIC_CAP} Knowledge level", data=progress))
 
     def _stage_display(self):
@@ -404,8 +465,9 @@ class English(WindowBuilder):
                             DataTextWidget(text=f"\n{example["original"]}", data=f"{example["translate"]}", sep="\n")
                         )
                     except KeyError:
-                        errors_alt_telegram.error(f"Impossible show up some example for word: {self._temp_current_card.word}",
-                                                  exc_info=True)
+                        errors_alt_telegram.error(
+                            f"Impossible show up some example for word: {self._temp_current_card.word}",
+                            exc_info=True)
 
     def result(self):
         self.state = None
@@ -451,7 +513,7 @@ class InspectEnglishRun(WindowBuilder):
         buttons = []
         stars = 0
         possible_star = 0
-        for i, x in enumerate(words):
+        for i, x in enumerate(words_):
             word, knowledge_size = x
             progress = knowledge_as_progress_string(knowledge.get(word, {}), knowledge_size, show_digits=False)
             stars += progress.count(Emoji.STAR)
@@ -462,7 +524,7 @@ class InspectEnglishRun(WindowBuilder):
                 callback_data=BanWordCallbackData(index=i, word=word)
             ))
         self.paginated_buttons = buttons
-        self.frozen_text.add_texts_rows(TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"))
+        self.add_texts_rows(TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"))
 
     async def banning(self, bot_control: BotControl, index: int, word: str):
         ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())

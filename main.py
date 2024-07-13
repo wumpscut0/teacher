@@ -1,15 +1,15 @@
 from asyncio import run
 from os import getenv
 
-from group import GroupTitleScreen
-from group.english import admin_english_router
-from group.shop import admin_shop_router
-from private import PrivateTitleScreen, Greetings
-from private.english import english_router
+from admin import GroupTitleScreen
+from admin.english import admin_english_router
+from admin.shop import admin_shop_router
+from user import PrivateTitleScreen, Greetings
+from user.english import english_router
 
-from private.shop import private_shop_router
+from user.shop import private_shop_router
 from core.dispatcher import BuildBot
-from private.commands import commands_router, BotCommands
+from user.commands import commands_router, BotCommands
 
 
 async def main():

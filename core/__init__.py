@@ -121,7 +121,7 @@ class BotControl:
             except TypeError:
                 pass
 
-        if await self._update_chat(markup):
+        if markup.initializing and await self._update_chat(markup):
             await self._context.append(markup)
 
     async def back(self, update=False):
@@ -162,6 +162,7 @@ class BotControl:
             await markup(self)
         except TypeError:
             pass
+
         await self._update_chat(markup)
 
     async def get_current(self):
@@ -182,7 +183,7 @@ class BotControl:
             except TypeError:
                 pass
 
-        if await self._update_chat(markup):
+        if markup.initializing and await self._update_chat(markup):
             await self._context.set_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):

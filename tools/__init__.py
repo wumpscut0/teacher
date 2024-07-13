@@ -39,6 +39,7 @@ class Emoji:
     EMAIL = "📧"
     LOCK_AND_KEY = "🔐"
     PLUS = "➕"
+    SHOP = "🛍️"
     UP = "🆙"
     SKIP = "⏭️"
     GREEN_BIG_SQUARE = "🟩"

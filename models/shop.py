@@ -23,24 +23,19 @@ class Shop(WindowBuilder):
         "buy": BuyingContentCallbackData,
         "edit": EditContentCallbackData
     }
-    _headers = {
-        "buy": Emoji.RED_QUESTION,
-        "edit": f"Edit shop {Emoji.TAG}"
-    }
 
     def __init__(self, action_type: Literal["buy", "edit"]):
         self.temp_balance = None
         self.action_type = action_type
-        super().__init__(
-                frozen_text_map=[
-                    TextWidget(text=self._headers[action_type])
-                ],
-            )
+        super().__init__()
+        if action_type == "edit":
+            self.frozen_text.add_texts_rows(TextWidget(text=f"Edit shop {Emoji.TAG}"))
 
     async def __call__(self, bot_control: BotControl):
         shop = await bot_control.bot_storage.get_value_by_key("shop", {})
         if not shop:
             await bot_control.append(Info(f"Nothing to show {Emoji.BAN}"))
+            self.initializing = False
             return
 
         if self.action_type == "buy":
@@ -48,7 +43,9 @@ class Shop(WindowBuilder):
             shop = {k: v for k, v in shop.items() if k not in collection}
 
         if not shop:
+            await bot_control.pop_last()
             await bot_control.append(Info(f"Empty {Emoji.WEB}"))
+            self.initializing = False
             return
 
         buttons = []
@@ -152,7 +149,7 @@ class Content(WindowBuilder):
 
     def input_content_display(self):
         self.state = States.input_photo_audio_content
-        self.add_texts_rows(TextWidget(text=f"Send a content {Emoji.GIFT}\nPhoto {Emoji.PHOTO} or audio {Emoji.AUDIO}"))
+        self.add_texts_rows(TextWidget(text=f"Send a content {Emoji.SHOP}\nPhoto {Emoji.PHOTO} or audio {Emoji.AUDIO}"))
 
     def input_name_display(self):
         self.state = States.input_text_content_name

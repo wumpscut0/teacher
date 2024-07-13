@@ -2,7 +2,7 @@ import string
 from asyncio import gather, create_task, to_thread
 from copy import deepcopy
 from os import getenv
-from random import choice
+from random import choice, shuffle
 from re import fullmatch, I
 from typing import Dict, List
 
@@ -67,10 +67,14 @@ class SuperEnglishDictionary:
             errors_alt_telegram.error(f"Impossible extract cards for word {word}. Trying refresh data", exc_info=True)
             return await cls.extract_cards(word, _cache=False)
 
+    @staticmethod
+    def get_translates(data: Dict):
+        return [tr for pos_value in data["pos"].values() for tr in pos_value.get("tr", [])]
+
     @classmethod
     async def _build_cards(cls, data: Dict, word: str) -> List[WordCard]:
         cards = []
-        translates = [tr for pos_value in data["pos"].values() for tr in pos_value.get("tr", [])]
+        translates = cls.get_translates(data)
         examples = []
         for pos_value in data["pos"].values():
             exs = pos_value.get("examples")
@@ -89,6 +93,7 @@ class SuperEnglishDictionary:
                 f"Give all possible translations, spaces-separated, of the word",
                 knowledge_schema
             ))
+            shuffle(translates)
             cards.append(WordCard(
                 word,
                 data,
@@ -265,7 +270,10 @@ class SuperEnglishDictionary:
         if cache:
             data = await cls._yandex_cache.get_value_by_key(word)
             if data:
-                return await to_thread(cls._yandex_parsing, data)
+                try:
+                    return await to_thread(cls._yandex_parsing, data)
+                except KeyError:
+                    return data
 
         if not fullmatch(r"[a-z-]+", word, flags=I):
             raise ValueError(f"Incorrect text {word} to yandex translate")
@@ -287,6 +295,10 @@ class SuperEnglishDictionary:
                         raise e_
                 else:
                     errors_alt_telegram.error(f"Yandex dict API returned unexpected code {status}")
+
+    @classmethod
+    async def set_yandex_data(cls, word, data):
+        await cls._yandex_cache.set_value_by_key(word, data)
 
     @classmethod
     def _yandex_parsing(cls, data: Dict):
