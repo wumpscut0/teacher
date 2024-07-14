@@ -1,3 +1,5 @@
+import asyncio
+from asyncio import sleep
 from copy import deepcopy
 from os import getenv
 from datetime import datetime, timedelta
@@ -187,53 +189,37 @@ class BotControl:
             await self._context.set_last(markup)
 
     async def _create_text_message(self, markup: WindowBuilder):
-        try:
-            message = await self._bot.send_message(
-                chat_id=self.chat_id,
-                text=markup.as_html,
-                reply_markup=markup.keyboard,
-            )
-            await self._delete_task_message(message_id=message.message_id)
-            await self._messages_ids.append(message.message_id)
-        except TelegramBadRequest as e:
-            errors_alt_telegram.critical("Unsuccessfully creating text message.", exc_info=True)
-            e.add_note("Impossible create text message")
-            raise e
+        message = await self._bot.send_message(
+            chat_id=self.chat_id,
+            text=markup.as_html,
+            reply_markup=markup.keyboard,
+        )
+        await self._delete_task_message(message_id=message.message_id)
+        await self._messages_ids.append(message.message_id)
 
     async def _update_text_message(self, markup: WindowBuilder):
         last_message_id = (await self._messages_ids.get_last())
         if last_message_id is None:
             await self._create_text_message(markup)
             return True
-        try:
-            await self._bot.edit_message_text(
-                chat_id=self.chat_id,
-                message_id=last_message_id,
-                text=markup.as_html,
-                reply_markup=markup.keyboard,
-            )
-            return True
-        except TelegramBadRequest as e:
-            if "not modified" in e.message:
-                return False
-            else:
-                await self._delete_message(last_message_id)
-                return await self._update_message[markup.type](markup)
+
+        await self._bot.edit_message_text(
+            chat_id=self.chat_id,
+            message_id=last_message_id,
+            text=markup.as_html,
+            reply_markup=markup.keyboard,
+        )
+        return True
 
     async def _create_photo_message(self, markup: WindowBuilder):
-        try:
-            message = await self._bot.send_photo(
-                chat_id=self.chat_id,
-                photo=markup.photo,
-                caption="" if markup.as_html == "No Data" else markup.as_html,
-                reply_markup=markup.keyboard,
-            )
-            await self._delete_task_message(message_id=message.message_id)
-            await self._messages_ids.append(message.message_id)
-        except TelegramBadRequest as e:
-            errors_alt_telegram.critical("Unsuccessfully creating photo message.", exc_info=True)
-            e.add_note("Impossible create photo message")
-            raise e
+        message = await self._bot.send_photo(
+            chat_id=self.chat_id,
+            photo=markup.photo,
+            caption="" if markup.as_html == "No Data" else markup.as_html,
+            reply_markup=markup.keyboard,
+        )
+        await self._delete_task_message(message_id=message.message_id)
+        await self._messages_ids.append(message.message_id)
 
     async def _update_photo_message(self, markup: WindowBuilder):
         last_message_id = (await self._messages_ids.get_last())
@@ -241,68 +227,49 @@ class BotControl:
             await self._create_photo_message(markup)
             return True
 
-        try:
-            await self._bot.edit_message_media(
-                chat_id=self.chat_id,
-                message_id=last_message_id,
-                media=InputMediaPhoto(media=markup.photo),
-            )
-            await self._bot.edit_message_caption(
-                chat_id=self.chat_id,
-                message_id=last_message_id,
-                caption="" if markup.as_html == "No Data" else markup.as_html,
-                reply_markup=markup.keyboard
-            )
-            return True
-        except TelegramBadRequest as e:
-            await self._delete_message(last_message_id)
-            if "not modified" in e.message:
-                return False
-            else:
-                await self._delete_message(last_message_id)
-                return await self._update_message[markup.type](markup)
+        await self._bot.edit_message_media(
+            chat_id=self.chat_id,
+            message_id=last_message_id,
+            media=InputMediaPhoto(media=markup.photo),
+        )
+        await self._bot.edit_message_caption(
+            chat_id=self.chat_id,
+            message_id=last_message_id,
+            caption="" if markup.as_html == "No Data" else markup.as_html,
+            reply_markup=markup.keyboard
+        )
+        return True
 
     async def _create_voice_message(self, markup: WindowBuilder):
-        try:
-            message = await self._bot.send_voice(
-                chat_id=self.chat_id,
-                voice=markup.voice,
-                caption="" if markup.as_html == "No Data" else markup.as_html,
-                reply_markup=markup.keyboard
-            )
-            await self._delete_task_message(message_id=message.message_id)
-            await self._messages_ids.append(message.message_id)
-        except TelegramBadRequest as e:
-            errors_alt_telegram.critical("Unsuccessfully creating voice message.", exc_info=True)
-            e.add_note("Impossible create voice message")
-            raise e
+        message = await self._bot.send_voice(
+            chat_id=self.chat_id,
+            voice=markup.voice,
+            caption="" if markup.as_html == "No Data" else markup.as_html,
+            reply_markup=markup.keyboard
+        )
+        await self._delete_task_message(message_id=message.message_id)
+        await self._messages_ids.append(message.message_id)
 
     async def _update_voice_message(self, markup: WindowBuilder):
-        last_message_id = (await self._messages_ids.get_last())
+        last_message_id = await self._messages_ids.get_last()
         if last_message_id is None:
             await self._create_voice_message(markup)
             return True
-        try:
-            await self._bot.edit_message_media(
-                chat_id=self.chat_id,
-                message_id=last_message_id,
-                media=InputMediaAudio(media=markup.voice),
-            )
-            await self._bot.edit_message_caption(
-                chat_id=self.chat_id,
-                message_id=last_message_id,
-                caption="" if markup.as_html == "No Data" else markup.as_html,
-                reply_markup=markup.keyboard
-            )
-            return True
-        except TelegramBadRequest as e:
-            if "not modified" in e.message:
-                return False
-            else:
-                await self._delete_message(last_message_id)
-                return await self._update_message[markup.type](markup)
 
-    async def _update_chat(self, markup: WindowBuilder | None, force=False) -> bool:
+        await self._bot.edit_message_media(
+            chat_id=self.chat_id,
+            message_id=last_message_id,
+            media=InputMediaAudio(media=markup.voice),
+        )
+        await self._bot.edit_message_caption(
+            chat_id=self.chat_id,
+            message_id=last_message_id,
+            caption="" if markup.as_html == "No Data" else markup.as_html,
+            reply_markup=markup.keyboard
+        )
+        return True
+
+    async def _update_chat(self, markup: WindowBuilder | None, force=False, attempt=1) -> bool:
         await self.clear_chat(force)
         try:
             if markup is None:
@@ -311,10 +278,21 @@ class BotControl:
                 markup.init()
                 await self._state.set_state(markup.state)
                 return await self._update_message[markup.type](markup)
-        except (IndexError, AttributeError, Exception):
-            errors_alt_telegram.error(f"Impossible build markup", exc_info=True)
-            await self.reset()
-            return False
+        except (IndexError, AttributeError, Exception) as e:
+            if "there is no" in e.message:
+                await self._delete_message(await self._messages_ids.get_last())
+                return await self._update_chat(markup, force)
+            if "Flood control" in e.message:
+                await sleep(1)
+                return await self._update_chat(markup, force)
+            elif "not modified" in e.message:
+                return False
+            elif "Impossible create" in e.message or attempt <= 0:
+                raise e
+            else:
+                errors_alt_telegram.error(f"Impossible build markup", exc_info=True)
+                await sleep(1)
+                return await self._update_chat(markup, force, attempt - 1)
 
     async def clear_chat(self, force: bool = False):
         if force:

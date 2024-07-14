@@ -11,6 +11,7 @@ from core.markups import Info, Conform
 from core import BotControl, Routers
 from models.english import English, InspectEnglishRun, BanWordCallbackData
 from tools import Emoji
+from config import DECK_SIZE
 
 english_router = Routers.private()
 
@@ -26,15 +27,16 @@ async def run_english(callback: CallbackQuery, bot_control: BotControl):
         return
 
     ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
+    user_deck_size = len(words) - len(ban_list)
+    if user_deck_size < DECK_SIZE:
+        await bot_control.append(
+            Info(f"{Emoji.PUZZLE} Not enough words for run {user_deck_size}/{DECK_SIZE} {Emoji.DENIAL}")
+        )
+        return
+
     deck = []
     for cards in (await gather(*(SuperEnglishDictionary.extract_cards(word) for word in words if word not in ban_list))):
         deck.extend(cards)
-
-    if not deck:
-        await bot_control.append(
-            Info(f"All words banned {Emoji.CRYING_CAT}")
-        )
-        return
 
     shuffle(deck)
 

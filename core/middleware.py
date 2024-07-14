@@ -4,7 +4,7 @@ from aiogram import BaseMiddleware, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Update
 
-from core import BotControl
+from core import BotControl, errors_alt_telegram
 from core.markups import Info, WindowBuilder
 from tools import Emoji, DictStorage
 
@@ -37,8 +37,12 @@ class BuildBotControl(BaseMiddleware):
         try:
             return await handler(event, data)
         except (ValueError, BaseException) as e:
-            await bot_control.set_current(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
-            raise e
+            try:
+                await bot_control.set_current(Info(f"Something went wrong {Emoji.CRYING_CAT + Emoji.BROKEN_HEARTH} Sorry"))
+                errors_alt_telegram.critical("Something went wrong", exc_info=True)
+            except (ValueError, BaseException) as e:
+                errors_alt_telegram.critical("Something went wrong", exc_info=True)
+                raise e
 
     async def _build_bot_control(self, event, state: FSMContext):
         bot_control = self._bot_control_schema(

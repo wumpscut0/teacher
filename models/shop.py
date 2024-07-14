@@ -177,3 +177,35 @@ class Content(WindowBuilder):
                 f"Item {self.temp_old_name} {Emoji.PHOTO if item["type"] == "photo" else Emoji.AUDIO}"
                 f" deleted {Emoji.CANDLE}", back_callback_data="update"
         ))
+
+    async def merge_content(self, bot_control):
+        if not self.temp_name or self.temp_name == Emoji.RED_QUESTION:
+            await bot_control.append(Info("Name required"))
+            self.initializing = False
+            return
+
+        if self.type == "text":
+            await bot_control.append(Info("Content required"))
+            self.initializing = False
+            return
+
+        shop = await bot_control.bot_storage.get_value_by_key("shop", {})
+
+        if self.action_type == "add" and self.temp_name in shop:
+            await bot_control.append(Info(f"Name {self.temp_name} already exist"))
+            self.initializing = False
+            return
+
+        if self.action_type == "edit":
+            shop.pop(self.temp_old_name)
+
+        shop[self.temp_name] = {
+            "type": self.type,
+            "content": self.photo if self.type == "photo" else self.voice,
+            "cost": {
+                Emoji.DNA: int(self.temp_dna_cost),
+                Emoji.CUBE: int(self.temp_cube_cost),
+                Emoji.STAR: int(self.temp_star_cost)
+            }
+        }
+        await bot_control.bot_storage.set_value_by_key("shop", shop)

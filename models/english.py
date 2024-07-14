@@ -12,6 +12,7 @@ from api import WordCard, SuperEnglishDictionary
 from core import errors_alt_telegram, BotControl
 from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
 from tools import Emoji, create_progress_text
+from config import DECK_SIZE
 
 
 class WordTickCallbackData(CallbackData, prefix="word_tick"):
@@ -39,31 +40,24 @@ class EditEnglish(WindowBuilder):
             frozen_text_map=[
                 TextWidget(text=self._prompt[action_type])
             ],
-            frozen_buttons_map=[
-                [
-                    ButtonWidget(
-                        text=f"Save and exit {Emoji.FLOPPY_DISC}",
-                        callback_data="merge_words"
-                    )
-                ],
-            ]
         )
         if action_type == "edit":
-            self.backable = False
+            self.back.text = f"Save and exit {Emoji.FLOPPY_DISC}"
+            self.back.callback_data = "merge_words"
             self._words_with_edit_display()
         if action_type == "add":
             self._only_words_display()
             self._dismiss_frozen_display()
 
     def _words_with_edit_display(self):
-        self.buttons_per_line = 3
+        self.buttons_width = 3
 
         buttons = []
         for i, word in enumerate(self._temp_words):
             buttons.append(ButtonWidget(
                           mark=Emoji.OK,
                           text=word,
-                          callback_data=WordTickCallbackData(index=i * self.buttons_per_line)
+                          callback_data=WordTickCallbackData(index=i * self.buttons_width)
                       ))
             buttons.append(ButtonWidget(
                 text=Emoji.PENCIL,
@@ -510,6 +504,7 @@ class InspectEnglishRun(WindowBuilder):
 
         knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
         ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
+        total_words = await bot_control.bot_storage.get_value_by_key("words", set())
         buttons = []
         stars = 0
         possible_star = 0
@@ -524,7 +519,11 @@ class InspectEnglishRun(WindowBuilder):
                 callback_data=BanWordCallbackData(index=i, word=word)
             ))
         self.paginated_buttons = buttons
-        self.add_texts_rows(TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"))
+        deck_size = len(total_words) - len(ban_list)
+        self.add_texts_rows(
+            TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"),
+            TextWidget(text=f"{Emoji.PUZZLE} {deck_size}/{DECK_SIZE} {Emoji.OK if deck_size >= DECK_SIZE else Emoji.DENIAL}")
+        )
 
     async def banning(self, bot_control: BotControl, index: int, word: str):
         ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())

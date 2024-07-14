@@ -1,5 +1,4 @@
 from re import Match
-from typing import Dict
 
 from aiogram import F
 from aiogram.filters import StateFilter
@@ -153,31 +152,5 @@ async def conform_delete_content(callback: CallbackQuery, bot_control: BotContro
 @admin_shop_router.callback_query(F.data == "merge_content")
 async def merge_content(callback: CallbackQuery, bot_control: BotControl):
     content: Content = await bot_control.get_current()
-    if not content.temp_name or content.temp_name == Emoji.RED_QUESTION:
-        await bot_control.append(Info("Name required"))
-        return
-
-    if content.type == "text":
-        await bot_control.append(Info("Content required"))
-        return
-
-    shop = await bot_control.bot_storage.get_value_by_key("shop", {})
-
-    if content.action_type == "add" and content.temp_name in shop:
-        await bot_control.append(Info(f"Name {content.temp_name} already exist"))
-        return
-
-    if content.action_type == "edit":
-        shop.pop(content.temp_old_name)
-
-    shop[content.temp_name] = {
-        "type": content.type,
-        "content": content.photo if content.type == "photo" else content.voice,
-        "cost": {
-            Emoji.DNA: int(content.temp_dna_cost),
-            Emoji.CUBE: int(content.temp_cube_cost),
-            Emoji.STAR: int(content.temp_star_cost)
-        }
-    }
-    await bot_control.bot_storage.set_value_by_key("shop", shop)
+    await content.merge_content(bot_control)
     await bot_control.back(True)

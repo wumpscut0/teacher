@@ -316,7 +316,7 @@ class SuperEnglishDictionary:
             }
             for tr in pos.get("tr", set()):
                 t = tr.get("text")
-                if t and all(True if sym not in string.ascii_letters else False for sym in t):
+                if t and " " not in t and all(True if sym not in string.ascii_letters else False for sym in t):
                     resume["pos"][pos.get("pos", "other")]["tr"].add(t)
                 s = tr.get("mean", ())
                 if s:
