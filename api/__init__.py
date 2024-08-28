@@ -1,15 +1,16 @@
 import string
 from asyncio import gather, create_task, to_thread
 from copy import deepcopy
+from logging import getLogger
 from os import getenv
 from random import choice, shuffle
 from re import fullmatch, I
 from typing import Dict, List
 
 from aiohttp import ClientSession
-from core.loggers import info_alt_telegram, errors_alt_telegram, debug_alt_telegram
 from tools import DictStorage, Emoji
 
+logger = getLogger()
 
 class WordCard:
     def __init__(
@@ -53,7 +54,7 @@ class SuperEnglishDictionary:
     @classmethod
     async def extract_cards(cls, word: str, _cache=True) -> List[WordCard] | None:
         if not fullmatch(r"[a-z-]+", word, flags=I):
-            errors_alt_telegram.error(f"Incorrect word {word} for extract data")
+            logger.error(f"Incorrect word {word} for extract data")
             return
 
         data = await cls.extract_data(word, _cache)
@@ -61,10 +62,10 @@ class SuperEnglishDictionary:
             return await cls._build_cards(data, word)
         except (KeyError, Exception) as e_:
             if not _cache:
-                errors_alt_telegram.critical(f"Impossible extract cards for word {word} after refresh data", exc_info=True)
+                logger.critical(f"Impossible extract cards for word {word} after refresh data", exc_info=True)
                 e_.add_note(f"Impossible extract cards for word {word} after refresh data")
                 raise e_
-            errors_alt_telegram.error(f"Impossible extract cards for word {word}. Trying refresh data", exc_info=True)
+            logger.error(f"Impossible extract cards for word {word}. Trying refresh data", exc_info=True)
             return await cls.extract_cards(word, _cache=False)
 
     @staticmethod
@@ -125,7 +126,7 @@ class SuperEnglishDictionary:
                 knowledge_schema
             ))
         if not cards:
-            info_alt_telegram.warning(f"{Emoji.WARNING} No cards for word {word}")
+            logger.warning(f"{Emoji.WARNING} No cards for word {word}")
         return cards
 
     @classmethod
@@ -165,7 +166,7 @@ class SuperEnglishDictionary:
     async def extract_data(cls, word: str, cache=True):
         data, audio_and_examples = await gather(cls._yandex(word, cache), cls._audio_and_examples(word, cache))
 
-        debug_alt_telegram.debug(f"Word: {word}\n"
+        logger.debug(f"Word: {word}\n"
                                  f"Audio and examples parsing resume: {audio_and_examples}\n"
                                  f"Yandex parsing resume: {data}")
         if audio_and_examples is not None:
@@ -178,7 +179,7 @@ class SuperEnglishDictionary:
                         data["pos"][pos]["examples"] = examples
             data["audio"] = audio_and_examples.get("audio")
 
-        debug_alt_telegram.debug(f"Resume: {data}")
+        logger.debug(f"Resume: {data}")
         return data
 
     @classmethod
@@ -211,7 +212,7 @@ class SuperEnglishDictionary:
                         e.add_note(f"Translate API {cls._translate_host} returned unexpected data {data} Status {status}")
                         raise e
                 else:
-                    errors_alt_telegram.error(f"Translate API returned unexpected code {status}")
+                    logger.error(f"Translate API returned unexpected code {status}")
 
     @classmethod
     async def _audio_and_examples(cls, word: str, cache: bool = True):
@@ -230,11 +231,11 @@ class SuperEnglishDictionary:
                         await cls._audio_and_examples_cache.set_value_by_key(word, data)
                         return await cls._audio_and_examples_parsing(data, word)
                     except KeyError:
-                        info_alt_telegram.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
+                        logger.critical(f"audio_and_examples API {path} returned unexpected data {data} Status {status}")
                 elif status == 404:
-                    info_alt_telegram.info(f"No audio_and_examples for word {word}")
+                    logger.info(f"No audio_and_examples for word {word}")
                 else:
-                    errors_alt_telegram.error(f"audio_and_examples API returned unexpected code {status}")
+                    logger.error(f"audio_and_examples API returned unexpected code {status}")
 
     @classmethod
     async def _audio_and_examples_parsing(cls, data: Dict, word: str):
@@ -294,7 +295,7 @@ class SuperEnglishDictionary:
                         )
                         raise e_
                 else:
-                    errors_alt_telegram.error(f"Yandex dict API returned unexpected code {status}")
+                    logger.error(f"Yandex dict API returned unexpected code {status}")
 
     @classmethod
     async def set_yandex_data(cls, word, data):

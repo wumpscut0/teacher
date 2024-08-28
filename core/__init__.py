@@ -1,6 +1,7 @@
 import asyncio
 from asyncio import sleep
 from copy import deepcopy
+from logging import getLogger
 from os import getenv
 from datetime import datetime, timedelta
 
@@ -14,9 +15,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 
 from core.markups import WindowBuilder
-from core.loggers import errors_alt_telegram, info_alt_telegram
 from tools import Emoji, ListStorage, DictStorage
 
+logger = getLogger()
 
 class _BotCommands:
     _AWAIT_TIME_MESSAGE_DELETE = 60
@@ -290,7 +291,7 @@ class BotControl:
             elif "Impossible create" in e.message or attempt <= 0:
                 raise e
             else:
-                errors_alt_telegram.error(f"Impossible build markup", exc_info=True)
+                logger.error(f"Impossible build markup", exc_info=True)
                 await sleep(1)
                 return await self._update_chat(markup, force, attempt - 1)
 

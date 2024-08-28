@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from math import ceil
 from typing import Literal, List, Dict
@@ -9,10 +10,12 @@ from aiogram.filters.callback_data import CallbackData
 
 from FSM import States
 from api import WordCard, SuperEnglishDictionary
-from core import errors_alt_telegram, BotControl
+from core import BotControl
 from core.markups import DataTextWidget, TextWidget, ButtonWidget, WindowBuilder
 from tools import Emoji, create_progress_text
 from config import DECK_SIZE
+
+logger = logging.getLogger()
 
 
 class WordTickCallbackData(CallbackData, prefix="word_tick"):
@@ -47,7 +50,11 @@ class EditEnglish(WindowBuilder):
             self._words_with_edit_display()
         if action_type == "add":
             self._only_words_display()
+            self._add_save_button()
             self._dismiss_frozen_display()
+            
+    def _add_save_button(self):
+        self.frozen_buttons.add_buttons_in_last_row(ButtonWidget(text=f"{Emoji.FLOPPY_DISC} Save", callback_data="merge_words"))
 
     def _words_with_edit_display(self):
         self.buttons_width = 3
@@ -459,9 +466,7 @@ class English(WindowBuilder):
                             DataTextWidget(text=f"\n{example["original"]}", data=f"{example["translate"]}", sep="\n")
                         )
                     except KeyError:
-                        errors_alt_telegram.error(
-                            f"Impossible show up some example for word: {self._temp_current_card.word}",
-                            exc_info=True)
+                        logger.error(f"Impossible show up some example for word: {self._temp_current_card.word}")
 
     def result(self):
         self.state = None

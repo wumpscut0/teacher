@@ -1,0 +1,19 @@
+services:
+  teacher:
+    env_file:
+      - .env
+    build:
+      dockerfile: ./Dockerfile
+    logging:
+      driver: json-file
+      options:
+        max-size: 200k
+        max-file: 10
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+
+networks:
+  default:
+    driver: bridge
