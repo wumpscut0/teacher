@@ -1,0 +1,13 @@
+/.idea/
+/sounds/
+/images/
+/english_dict.py
+/.env
+/info.log
+/errors.log
+
+/api/y.json
+/api/errors.log
+/api/info.log
+/*.json
+/*.log

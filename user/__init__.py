@@ -19,13 +19,13 @@ class PrivateTitleScreen(WindowBuilder):
             photo="AgACAgIAAx0Cf42o9wACA1lmg-KSXwhGC6Z6E3R00sYQ3cIKowACqt8xG3rTIEgLAn-plPmK1QEAAwIAA3MAAzUE",
             frozen_buttons_map=[
                 [
-                    ButtonWidget(text="Run English", callback_data="run_english")
+                    ButtonWidget(text=f"Run English {Emoji.SQUARE_ACADEMIC_CAP}", callback_data="run_english")
                 ],
                 [
                     ButtonWidget(text=f"Inspect English Run {Emoji.OPEN_BOOK}", callback_data="inspect_english_run")
                 ],
                 [
-                    ButtonWidget(text=f"Shop {Emoji.GIFT}", callback_data="shop")
+                    ButtonWidget(text=f"Shop {Emoji.SHOP}", callback_data="shop")
                 ],
                 [
                     ButtonWidget(text=f"My collection {Emoji.PICTURE_2}", callback_data="collection")

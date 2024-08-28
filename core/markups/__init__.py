@@ -208,8 +208,8 @@ class WindowBuilder(
             left_mark: str = "",
             right_text: str = Emoji.RIGHT,
             right_mark: str = "",
-            buttons_per_page: int = 10,
-            buttons_per_line: int = 1,
+            buttons_width: int = 1,
+            buttons_height: int = 10,
             page: int = 0,
     ):
         TextMarkupConstructor.__init__(self, temp_text_map)
@@ -232,8 +232,10 @@ class WindowBuilder(
         self._back_inited = False
 
         self.paginated_buttons = [] if paginated_buttons is None else paginated_buttons
-        self._size_page = buttons_per_page
-        self.buttons_per_line = buttons_per_line
+        # If initializing is False, a markup can correct install another markup with undoing the installation of itself
+        self.initializing = True
+        self._buttons_height = buttons_height
+        self.buttons_width = buttons_width
         self.backable = auto_back
         self.page = page
         self.type = type_
@@ -247,8 +249,12 @@ class WindowBuilder(
             raise ValueError(f"Available type is {self._available_types} not {self.type}")
 
     @property
+    def _square_window(self):
+        return self._buttons_height * self.buttons_width
+
+    @property
     def partitioned_data(self) -> List[Any]:
-        partitioned_data = self.split(self._size_page, self.paginated_buttons)
+        partitioned_data = self.split(self._square_window, self.paginated_buttons)
         return partitioned_data[self.page % len(partitioned_data)]
 
     def init(self):
@@ -265,7 +271,7 @@ class WindowBuilder(
 
     def _init_paginated_buttons(self):
         if not self._paginated_buttons_inited:
-            for row in self.split(self.buttons_per_line, self.partitioned_data):
+            for row in self.split(self.buttons_width, self.partitioned_data):
                 self.add_buttons_as_new_row(*row)
             self._paginated_buttons_inited = True
 
@@ -276,7 +282,7 @@ class WindowBuilder(
             self._frozen_buttons_map_inited = True
 
     def _init_pagination(self):
-        if not self._pagination_inited and len(self.split(self._size_page, self.paginated_buttons)) > 1:
+        if not self._pagination_inited and len(self.split(self._square_window, self.paginated_buttons)) > 1:
             self.add_buttons_as_new_row(self.left, self.right)
             self._pagination_inited = True
 

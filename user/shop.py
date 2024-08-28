@@ -60,8 +60,8 @@ async def collection_(callback: CallbackQuery, bot_control: BotControl):
         buttons.append(ButtonWidget(text=name, callback_data=ShowItemCallbackData(name=name)))
     collection = WindowBuilder(
         paginated_buttons=buttons,
-        buttons_per_line=3,
-        buttons_per_page=30
+        buttons_height=3,
+        buttons_width=30
     )
     await bot_control.append(collection)
 

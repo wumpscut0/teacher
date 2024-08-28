@@ -9,7 +9,7 @@ from redis.asyncio import Redis
 from redis.commands.core import ResponseT
 from redis.typing import KeyT, ExpiryT, AbsExpiryT
 
-from tools.loggers import debug_tools, info_tools, errors_tools
+
 
 load_dotenv(find_dotenv())
 
@@ -39,6 +39,7 @@ class Emoji:
     EMAIL = "📧"
     LOCK_AND_KEY = "🔐"
     PLUS = "➕"
+    SHOP = "🛍️"
     UP = "🆙"
     SKIP = "⏭️"
     GREEN_BIG_SQUARE = "🟩"
@@ -249,30 +250,18 @@ class Storage:
     async def get(self):
         try:
             value = await self.CLIENT.get(self._key)
-            debug_tools.debug(f"GET key: {self._key} -> value: {value}")
         except (AttributeError, ModuleNotFoundError, Exception):
-            errors_tools.error(f"Impossible restore broken deserialized data\nKey: {self._key}")
             await self.set(self._default)
             return self._default
         if value is None:
             return self._default
         return value
 
-    async def set(self, value: Any, save_data_in_log: bool = True):
-        if save_data_in_log:
-            debug_tools.debug(f"SET {self._key} -> value: {value}")
-        else:
-            debug_tools.debug(f"SET key: {self._key} -> value: {value}")
+    async def set(self, value: Any):
         await self.CLIENT.set(self._key, value)
 
-    async def destroy(self, save_data_in_log: bool = True):
-        if save_data_in_log:
-            data = await self.CLIENT.get(self._key)
-            await self.CLIENT.set(self._key, None)
-            info_tools.info(f"Data: {data} removed from key: {self._key} ")
-        else:
-            await self.CLIENT.set(self._key, None)
-            info_tools.info(f"Data by key: {self._key} destroyed")
+    async def destroy(self):
+        await self.CLIENT.set(self._key, None)
 
 
 class DictStorage(Storage):

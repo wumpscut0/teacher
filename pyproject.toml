@@ -8,13 +8,10 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 aiogram = "^3.7.0"
-SQLAlchemy = "^2.0.30"
 python-dotenv = "^1.0.1"
-asyncpg = "^0.29.0"
 redis = "^5.0.5"
 apscheduler = "^3.10.4"
 levenshtein = "^0.25.1"
-pymongo = {extras = ["srv"], version = "^4.8.0"}
 
 
 [build-system]

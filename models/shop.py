@@ -23,24 +23,19 @@ class Shop(WindowBuilder):
         "buy": BuyingContentCallbackData,
         "edit": EditContentCallbackData
     }
-    _headers = {
-        "buy": Emoji.RED_QUESTION,
-        "edit": f"Edit shop {Emoji.TAG}"
-    }
 
     def __init__(self, action_type: Literal["buy", "edit"]):
         self.temp_balance = None
         self.action_type = action_type
-        super().__init__(
-                frozen_text_map=[
-                    TextWidget(text=self._headers[action_type])
-                ],
-            )
+        super().__init__()
+        if action_type == "edit":
+            self.frozen_text.add_texts_rows(TextWidget(text=f"Edit shop {Emoji.TAG}"))
 
     async def __call__(self, bot_control: BotControl):
         shop = await bot_control.bot_storage.get_value_by_key("shop", {})
         if not shop:
             await bot_control.append(Info(f"Nothing to show {Emoji.BAN}"))
+            self.initializing = False
             return
 
         if self.action_type == "buy":
@@ -48,7 +43,9 @@ class Shop(WindowBuilder):
             shop = {k: v for k, v in shop.items() if k not in collection}
 
         if not shop:
+            await bot_control.pop_last()
             await bot_control.append(Info(f"Empty {Emoji.WEB}"))
+            self.initializing = False
             return
 
         buttons = []
@@ -152,7 +149,7 @@ class Content(WindowBuilder):
 
     def input_content_display(self):
         self.state = States.input_photo_audio_content
-        self.add_texts_rows(TextWidget(text=f"Send a content {Emoji.GIFT}\nPhoto {Emoji.PHOTO} or audio {Emoji.AUDIO}"))
+        self.add_texts_rows(TextWidget(text=f"Send a content {Emoji.SHOP}\nPhoto {Emoji.PHOTO} or audio {Emoji.AUDIO}"))
 
     def input_name_display(self):
         self.state = States.input_text_content_name
@@ -180,3 +177,35 @@ class Content(WindowBuilder):
                 f"Item {self.temp_old_name} {Emoji.PHOTO if item["type"] == "photo" else Emoji.AUDIO}"
                 f" deleted {Emoji.CANDLE}", back_callback_data="update"
         ))
+
+    async def merge_content(self, bot_control):
+        if not self.temp_name or self.temp_name == Emoji.RED_QUESTION:
+            await bot_control.append(Info("Name required"))
+            self.initializing = False
+            return
+
+        if self.type == "text":
+            await bot_control.append(Info("Content required"))
+            self.initializing = False
+            return
+
+        shop = await bot_control.bot_storage.get_value_by_key("shop", {})
+
+        if self.action_type == "add" and self.temp_name in shop:
+            await bot_control.append(Info(f"Name {self.temp_name} already exist"))
+            self.initializing = False
+            return
+
+        if self.action_type == "edit":
+            shop.pop(self.temp_old_name)
+
+        shop[self.temp_name] = {
+            "type": self.type,
+            "content": self.photo if self.type == "photo" else self.voice,
+            "cost": {
+                Emoji.DNA: int(self.temp_dna_cost),
+                Emoji.CUBE: int(self.temp_cube_cost),
+                Emoji.STAR: int(self.temp_star_cost)
+            }
+        }
+        await bot_control.bot_storage.set_value_by_key("shop", shop)
