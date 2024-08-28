@@ -509,7 +509,6 @@ class InspectEnglishRun(WindowBuilder):
 
         knowledge = await bot_control.user_storage.get_value_by_key("english:knowledge", {})
         ban_list = await bot_control.user_storage.get_value_by_key("english:ban_list", set())
-        total_words = await bot_control.bot_storage.get_value_by_key("words", set())
         buttons = []
         stars = 0
         possible_star = 0
@@ -524,7 +523,7 @@ class InspectEnglishRun(WindowBuilder):
                 callback_data=BanWordCallbackData(index=i, word=word)
             ))
         self.paginated_buttons = buttons
-        deck_size = len(total_words) - len(ban_list)
+        deck_size = len(words_) - len(ban_list)
         self.add_texts_rows(
             TextWidget(text=f"{Emoji.STAR} {stars}/{possible_star}"),
             TextWidget(text=f"{Emoji.PUZZLE} {deck_size}/{DECK_SIZE} {Emoji.OK if deck_size >= DECK_SIZE else Emoji.DENIAL}")
