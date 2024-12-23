@@ -42,8 +42,4 @@ docker-compose up --build
 
 ## To do
 - [ ] Модификация core API
-- [ ] Выложить core как пакет в PyPl
 - [ ] Рефакторинг
-
-## Команда проекта
-- Всеволод Богдашов — Web-developer
